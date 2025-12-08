@@ -1,0 +1,28 @@
+# Node/Vite basics
+node_modules/
+dist/
+.tmp/
+.temp/
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+debug.log
+
+# Env files (do not commit secrets)
+.env
+.env.*
+!.env.example
+
+# Editor/OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+
+# Testing/coverage
+coverage/
+.jest/
