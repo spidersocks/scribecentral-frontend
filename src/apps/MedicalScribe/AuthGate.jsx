@@ -146,6 +146,7 @@ export function AuthGate({ children }) {
 
   const handleSignIn = useCallback(async () => {
     try {
+      console.info("[AuthGate] initiating Hosted UI redirect from", window.location.origin);
       await signInWithRedirect({
         provider: { type: "oauth", options: { provider: "Cognito" } },
       });
