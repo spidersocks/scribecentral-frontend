@@ -1,0 +1,106 @@
+.modalContent {
+  max-width: 720px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  max-height: 56vh;
+  overflow: auto;
+}
+
+.templateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-panel, #fff);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.03);
+}
+
+.templateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.templateName {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 52ch;
+}
+
+.templateMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.metaItem {
+  color: var(--text-secondary, #6b7280);
+}
+
+.metaDivider {
+  color: rgba(0,0,0,0.06);
+  margin: 0 4px;
+}
+
+.templateActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.button {
+  cursor: pointer;
+}
+
+/* Buttons adapt to existing global button classes, add a compact look for modal actions */
+.button-secondary {
+  background: var(--bg-panel, #fff);
+  color: var(--text-primary, #111827);
+  border: 1px solid var(--border-color, #e5e7eb);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.button-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.empty {
+  text-align: center;
+  padding: 24px 8px;
+}
+
+.subtle {
+  color: #666;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.errorText {
+  margin-top: 8px;
+  color: var(--accent-danger, #b00020);
+  font-size: 13px;
+}

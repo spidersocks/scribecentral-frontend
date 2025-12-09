@@ -1,0 +1,82 @@
+.loading-animation-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px; /* larger for main screen */
+  padding: 2rem;
+  gap: 1.25rem;
+}
+
+.loading-icon-wrapper {
+  position: relative;
+  width: 140px;   /* larger */
+  height: 140px;  /* larger */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-icon {
+  width: 112px;   /* larger */
+  height: 112px;  /* larger */
+  object-fit: contain;
+  position: relative;
+  z-index: 2;
+  animation: heartbeat-pulse 2s ease-in-out infinite;
+}
+
+/* Hide the ring */
+.pulse-ring {
+  display: none;
+}
+
+@keyframes heartbeat-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+.loading-message {
+  font-size: 1.1rem; /* slightly larger text */
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  text-align: center;
+  animation: fade-in-out 2s ease-in-out infinite;
+}
+
+@keyframes fade-in-out {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .loading-animation-container {
+    min-height: 320px;
+    gap: 1rem;
+  }
+
+  .loading-icon-wrapper {
+    width: 110px;
+    height: 110px;
+  }
+
+  .loading-icon {
+    width: 88px;
+    height: 88px;
+  }
+
+  .loading-message {
+    font-size: 1rem;
+  }
+}

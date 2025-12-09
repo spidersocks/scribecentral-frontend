@@ -1,0 +1,667 @@
+.sidebar {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  padding: 1rem 1rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  height: 100vh;            /* Ensure sidebar fills viewport height */
+  overflow: hidden;         /* Prevent page scroll; inner wrapper will scroll */
+}
+
+.mobileSidebarClose {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0.5rem;
+  z-index: 10;
+}
+
+.mobileSidebarClose:hover {
+  color: var(--text-primary);
+}
+
+.sidebarBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0 1rem 0;
+  flex: 0 0 auto; /* Non-scrolling */
+}
+
+.sidebarLogo {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  padding: 0 0.5rem;
+}
+
+.sidebarSearch {
+  padding: 0 0 0.75rem 0;
+  flex: 0 0 auto; /* Non-scrolling */
+}
+
+.sidebarSearchInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.sidebarSearchInput:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+}
+
+.sidebarSearchInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+.sidebarNavWrapper {
+  flex: 1 1 auto;           /* Take remaining space */
+  min-height: 0;            /* Allow flex child to shrink and enable scrolling */
+  overflow-y: auto;         /* Scroll only this area */
+  overflow-x: hidden;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+
+  /* Default (desktop): keep footer close to bottom */
+  padding-bottom: calc(140px + env(safe-area-inset-bottom));
+}
+
+.sidebarNavWrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebarNavWrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebarNavWrapper::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-bottom: 1rem;
+}
+
+.sidebarEmpty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: calc(100% - 2rem);
+}
+
+.centered {
+  display: block;
+}
+
+.emptyTitle {
+  font-size: 0.95rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.subtle {
+  font-weight: 600;
+}
+
+.emptySub {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.sidebarSection {
+  margin-bottom: 0.5rem;
+}
+
+.sidebarSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: transparent;
+  border-radius: 0.375rem;
+  margin-bottom: 0.25rem;
+}
+
+.sidebarPatientHeader {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: none;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+  letter-spacing: 0;
+}
+
+.sidebarPatientHeader:hover {
+  background-color: var(--bg-primary);
+}
+
+.sidebarPatientInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebarChevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.patientStar {
+  display: flex;
+  align-items: center;
+  color: var(--accent-warning, #fbbf24);
+  margin-right: 4px;
+}
+
+.sidebarSectionTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarUnknown {
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
+.sidebarSectionCount {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sidebarPatientActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.patientMenuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.sidebarPatientHeader:hover .patientMenuButton {
+  opacity: 1;
+}
+
+.patientMenuButton:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.patientMenuDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 170px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 3px;
+  z-index: 1000;
+}
+
+.patientMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.patientMenuItem svg {
+  width: 14px;
+  height: 14px;
+}
+
+.patientMenuItem:hover {
+  background: var(--bg-secondary);
+}
+
+.patientMenuItemDanger {
+  color: var(--accent-danger);
+}
+
+.patientMenuItemDanger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.patientMenuDivider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 3px 0;
+}
+
+.sidebarSectionContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 1.5rem;
+  margin-left: 0.75rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebarConsultationItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.sidebarConsultationItem:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.sidebarConsultationItemActive {
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+.sidebarConsultationItemActive .sidebarLinkText {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.sidebarConsultationItemEditing {
+  padding: 4px 10px;
+}
+
+.sidebarRenameInput {
+  width: 100%;
+  padding: 6px 8px;
+  border: 2px solid #3b82f6;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  background: #ffffff;
+}
+
+.sidebarLink {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  min-width: 0;
+}
+
+.sidebarLinkContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebarLinkText {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s;
+}
+
+.sidebarLinkDate {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarIcons {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.sidebarConsultationItem:hover .sidebarIcons {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editIconWrapper,
+.deleteIconWrapper {
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  pointer-events: auto;
+}
+
+.editIconWrapper:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.deleteIconWrapper:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.addConsultationButtonInline {
+  width: 100%;
+  margin-left: 0;
+  margin-top: 0.5rem;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.02);
+  border: none;
+  border-radius: 4px;
+  color: #6b7280;
+  font-size: 0.81rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.addConsultationButtonInline svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.addConsultationButtonInline:hover {
+  background: rgba(0, 122, 255, 0.05);
+  color: var(--accent-primary);
+}
+
+.sidebarAddPatientFooter {
+  position: sticky;
+  bottom: 0;
+  padding: 1rem 0 0.75rem 0;
+  background: linear-gradient(to top, var(--bg-panel) 85%, transparent);
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+  flex-shrink: 0; /* Keep footer visible; do not shrink */
+  z-index: 2;
+}
+
+.addPatientButtonFooter {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.15);
+}
+
+.addPatientButtonFooter:hover {
+  background: var(--accent-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
+}
+
+.addPatientButtonFooter:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.15);
+}
+
+.addPatientButtonFooter svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Footer stack: user info centered above the sign out button */
+.sidebarFooter {
+  padding: 0.75rem 0 0.75rem; /* desktop: closer to bottom */
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  align-items: left;
+  gap: 0.5rem;
+}
+
+/* User block centered horizontally; avatar vertically centered to text block */
+.userBlock {
+  display: grid;
+  grid-template-columns: auto auto; /* prevent stretching; keep compact */
+  align-items: left;              /* center avatar to the two-line text block */
+  column-gap: 0.8rem;
+  margin: 0 auto;                   /* center the whole block above the button */
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e5edff;
+  color: #1d3c6e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+}
+
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  justify-content: center;
+  align-self: center; /* assure vertical centering */
+  min-width: 0;
+  text-align: center; /* center over the button */
+}
+
+.userName {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center; /* center text */
+}
+
+.userEmail {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center; /* center text */
+}
+
+/* Sign-out centered below */
+.signOutButton {
+  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.signOutButton:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+.sidebarOverlay {
+  display: none;
+}
+
+.deleteConfirmationModal {
+  max-width: 450px;
+}
+
+.modalWarningText {
+  font-size: 0.95rem;
+  color: #6b7280;
+  margin: 0.75rem 0 0;
+}
+
+.buttonDanger {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.buttonDanger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    left: -320px;
+    top: 0;
+    bottom: 0;
+    width: 300px;
+    z-index: 1000;
+    transition: left 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    height: 100vh; /* Explicit for mobile as well */
+  }
+
+  .sidebarOpen {
+    left: 0;
+  }
+
+  .sidebarOverlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+
+  .mobileSidebarClose {
+    display: block;
+  }
+
+  /* Tablet: keep footer slightly raised, but less than mobile */
+  .sidebarNavWrapper {
+    padding-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+
+  /* Footer spacing slightly increased vs desktop */
+  .sidebarFooter {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 768px) {
+  /* Mobile: keep footer comfortably above browser bars */
+  .sidebarNavWrapper {
+    padding-bottom: calc(240px + env(safe-area-inset-bottom));
+  }
+
+  .sidebarFooter {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom) + 24px);
+  }
+}

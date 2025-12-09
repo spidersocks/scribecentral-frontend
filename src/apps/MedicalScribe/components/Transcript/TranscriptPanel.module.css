@@ -1,0 +1,174 @@
+/* Top controls shown when session is idle */
+.inTranscriptControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;  /* This already centers horizontally */
+  justify-content: center;  /* Add this to center vertically */
+  gap: 1rem;
+  padding: 2rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  min-height: 200px;  /* Add minimum height for better centering */
+}
+
+/* Language selector */
+.languageSelectorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.languageSelectorContainer label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.languageSelector {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.languageSelector:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+.languageSelector:disabled {
+  background-color: #f3f4f6;
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Recording/paused controls bar */
+.recordingControlsBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+}
+
+/* Status pill */
+.statusDisplay {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--bg-panel);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Scrollable transcript container */
+.transcriptBox {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem; /* reduced spacing between segments */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  font-size: 1rem;
+  line-height: 1.7;
+  padding: 1.25rem;
+  background: transparent;
+}
+
+/* Optional custom scrollbar for better UX */
+.transcriptBox::-webkit-scrollbar {
+  width: 8px;
+}
+.transcriptBox::-webkit-scrollbar-track {
+  background: transparent;
+}
+.transcriptBox::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+/* Interim/partial text styling */
+.interimTranscript {
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+  padding: 0;
+}
+
+/* Loading and empty states inside transcript box */
+.loadingContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px; /* larger and centered */
+  width: 100%;
+}
+
+.emptyTranscript {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: 24px 12px;
+}
+.emptyTranscript h4 {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+.emptyTranscript p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 1024px) {
+  .inTranscriptControls {
+    padding: 1.5rem 1rem;
+  }
+
+  /* Remove nested scrolling on mobile/tablet; let page scroll instead */
+  .transcriptBox {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+  .action-buttons .button {
+    width: 100%;
+  }
+
+  /* Keep controls accessible at the bottom while scrolling */
+  .recordingControlsBar {
+    position: sticky;
+    bottom: 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: none;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+    z-index: 3;
+  }
+
+  .statusDisplay {
+    width: auto;
+    justify-content: center;
+  }
+
+  .transcriptBox {
+    padding: 1rem;
+    font-size: 0.95rem;
+  }
+}

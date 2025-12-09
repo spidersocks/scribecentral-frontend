@@ -1,0 +1,474 @@
+.notesHeaderControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex-wrap: wrap; /* allow wrapping so nothing gets cut off */
+}
+
+.noteTypeSelectorContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.noteTypeLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.noteTypeSelect {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 220px;
+  max-width: 100%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.noteTypeSelect:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.noteTypeSelect:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.noteTypeSelect:disabled {
+  background-color: #f1f1f1;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.notesActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.iconButton:hover {
+  /* keep hover subtle, avoid strong blue highlights per request */
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* New: subtler look just for the template button */
+.templateButton {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+  background: transparent;
+}
+
+.templateButton:hover {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.iconButton:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.iconButtonCopied {
+  background-color: var(--accent-secondary);
+  color: #ffffff;
+  border-color: var(--accent-secondary);
+}
+
+.iconButtonCopied:hover {
+  background-color: var(--accent-secondary-dark);
+  border-color: var(--accent-secondary-dark);
+  color: #ffffff;
+}
+
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.actionText {
+  display: inline-block;
+}
+
+/* ---- Custom Templates single-button + accordion menu ---- */
+.templateMenuWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.customTemplatesButton {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.45rem 0.75rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+}
+
+/* Menu that appears under the button */
+.templatesMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  z-index: 60;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* menu items — keep simple styling, no heavy accent colors */
+.templatesMenuItem {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.templatesMenuItem:hover {
+  background: var(--bg-primary);
+}
+
+/* End menu styles */
+
+/* note/warning/banner and rest of file preserved below (unchanged) */
+.noteTypeHint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  background-color: var(--bg-panel);
+}
+
+.noteTypeHintInfo {
+  background-color: #e6f3ff;
+  border-bottom-color: #99ccff;
+  color: #004085;
+}
+
+.noteTypeHintWarning {
+  background-color: #fff3cd;
+  border-bottom-color: #ffc107;
+  color: #856404;
+}
+
+.hintIcon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.notesDisplay {
+  font-size: 1rem;
+  line-height: 1.7;
+  padding: 1.25rem;
+  background-color: var(--bg-panel);
+}
+
+.notesDisplay h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.notesDisplay h3:first-child {
+  margin-top: 0;
+}
+
+.notesDisplay p {
+  margin: 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.notesDisplay ul {
+  list-style: none;
+  padding-left: 1rem;
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--accent-secondary);
+}
+
+.notesDisplay ul li {
+  position: relative;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  overflow-wrap: break-word;
+}
+
+.notesDisplay ul li::before {
+  content: "•";
+  color: var(--accent-secondary);
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.noneText {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.nestedSection {
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-color);
+  margin: 0.5rem 0;
+}
+
+.nestedSection p {
+  margin: 0.4rem 0;
+  font-size: 0.95rem;
+}
+
+.richEditorToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  flex-wrap: wrap;
+}
+
+.toolbarSection {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.toolbarDivider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--border-color);
+  margin: 0 0.5rem;
+}
+
+.toolbarButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
+}
+
+.toolbarButton:hover:not(:disabled) {
+  background-color: var(--bg-panel);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.toolbarButton:active:not(:disabled) {
+  background-color: #e9ecef;
+}
+
+.toolbarButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbarActions {
+  margin-left: auto;
+  gap: 0.75rem;
+  display: flex;
+}
+
+.toolbarActionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+}
+
+.toolbarActionButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbarCancel {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.toolbarCancel:hover {
+  background-color: var(--bg-primary);
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.toolbarSave {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+}
+
+.toolbarSave:hover {
+  background-color: var(--accent-primary-dark);
+  border-color: var(--accent-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.toolbarSave:active {
+  transform: translateY(0);
+}
+
+.richEditorContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.7;
+  outline: none;
+  min-height: 100%;
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.emptyNote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  text-align: center;
+  padding: 2rem;
+  background-color: var(--bg-panel);
+}
+
+.emptyNoteTitle {
+  font-size: 1.1rem;
+  color: #6b7280;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.emptyNoteSub {
+  color: var(--text-tertiary);
+  font-size: 0.95rem;
+  max-width: 400px;
+}
+
+/* MOBILE: compact header and icons-only actions to prevent cut-off */
+@media (max-width: 768px) {
+  .noteTypeSelect {
+    min-width: 150px;
+    width: auto;
+  }
+
+  .notesHeaderControls {
+    gap: 0.4rem;
+  }
+
+  .notesActions {
+    margin-left: auto;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  /* On mobile make the custom templates button icon-only (compact) */
+  .customTemplatesButton {
+    padding: 0.45rem;
+  }
+
+  .customTemplatesButton .actionText {
+    display: none;
+  }
+
+  .iconButton {
+    padding: 0.5rem; /* icon-only buttons */
+  }
+
+  .actionText {
+    display: none; /* hide labels, keep icons visible */
+  }
+
+  .toolbarActionButton .actionText,
+  .toolbarActionButton span {
+    display: none; /* icon-only for Save/Cancel */
+  }
+}
+
+/* TABLET: slightly tighter select */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .noteTypeSelect {
+    min-width: 180px;
+  }
+}

@@ -1,0 +1,35 @@
+.transcriptSegmentContainer {
+  margin-bottom: 0.6em; /* reduced from 0.9em */
+}
+
+.originalTranscriptText {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  margin-bottom: 0.2em; /* slightly tighter */
+}
+
+.englishOnlyTranscript {
+  margin-bottom: 0.45em; /* reduced from 0.85em */
+}
+
+.speakerLabelClickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+  transition: background-color 0.2s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.speakerLabelClickable:hover {
+  background-color: #eef2f6;
+}
+
+.translatedTranscriptText {
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-color);
+}
