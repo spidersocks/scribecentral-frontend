@@ -1,12 +1,10 @@
-export const BACKEND_WS_URL =
-  import.meta.env.VITE_BACKEND_WS_URL || "";
+// Backend URLs are driven by env. In production, use HTTPS/WSS to avoid mixed-content blocking.
+export const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL || "";
+export const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
 
-export const BACKEND_API_URL =
-  import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
-
-// In production, set:
-// VITE_BACKEND_WS_URL = wss://api.scribecentral.io/client-transcribe
+// Example production configuration:
 // VITE_BACKEND_API_URL = https://api.scribecentral.io
+// VITE_BACKEND_WS_URL  = wss://api.scribecentral.io/client-transcribe
 
 export const DEFAULT_NOTE_TYPES = [
   { id: "standard", name: "Standard Clinical Note" },
@@ -15,7 +13,6 @@ export const DEFAULT_NOTE_TYPES = [
   { id: "consultation", name: "Consultation Note" },
 ];
 
-// ✅ NEW: Default patient profile template
 export const DEFAULT_PATIENT_PROFILE = {
   name: "",
   dateOfBirth: "",
@@ -42,13 +39,13 @@ export const DEFAULT_CONSULTATION = {
   speakerRoles: {},
   activeTab: "patient",
   hasShownHint: false,
-  patientProfile: { ...DEFAULT_PATIENT_PROFILE }, // ✅ Use template
+  patientProfile: { ...DEFAULT_PATIENT_PROFILE },
   additionalContext: "",
   customNameSet: false,
   noteType: "standard",
-  patientId: null,       
-  patientName: null,     
-  createdAt: null,      
+  patientId: null,
+  patientName: null,
+  createdAt: null,
   updatedAt: null,
   transcriptLoading: false,
   transcriptLoaded: false,

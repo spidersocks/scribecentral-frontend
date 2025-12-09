@@ -21,7 +21,6 @@ export const useAudioRecording = (
   const sessionStateRef = useRef('idle');
   const ownerUserIdRef = useRef(null);
 
-  // Track how many segments we believe are persisted server-side (best effort)
   const persistedCountRef = useRef(0);
 
   if (activeConsultation?.ownerUserId) {
@@ -44,11 +43,6 @@ export const useAudioRecording = (
         end_time_ms: segment.endTimeMs ?? null,
       };
 
-      console.info("[useAudioRecording] Persisting segment payload", {
-        consultationId: activeConsultationId,
-        payload
-      });
-
       const res = await apiClient.createTranscriptSegment({
         token: undefined,
         consultationId: activeConsultationId,
@@ -60,16 +54,10 @@ export const useAudioRecording = (
           consultationId: activeConsultationId,
           status: res.status,
           errorMessage: res.error?.message,
-          responseData: res.data // <- backend 422 detail should be visible now
+          responseData: res.data
         });
         return false;
       }
-      console.info("[useAudioRecording] Persist segment OK", {
-        consultationId: activeConsultationId,
-        sequenceNumber,
-        id: segment.id,
-        segment_id: res.data?.segment_id
-      });
       persistedCountRef.current += 1;
       return true;
     } catch (e) {
@@ -77,35 +65,6 @@ export const useAudioRecording = (
       return false;
     }
   }, [activeConsultationId]);
-
-  // Persist a full set of segments (backfill), ordered by sequence
-  const persistAllSegments = useCallback(async () => {
-    if (!activeConsultation) return { attempted: 0, succeeded: 0 };
-    const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
-      seg,
-      seq: idx
-    }));
-
-    console.info("[useAudioRecording] Backfill persist: starting", {
-      consultationId: activeConsultationId,
-      count: ordered.length
-    });
-
-    let success = 0;
-    for (const { seg, seq } of ordered) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
-      if (ok) success += 1;
-    }
-
-    console.info("[useAudioRecording] Backfill persist: completed", {
-      consultationId: activeConsultationId,
-      attempted: ordered.length,
-      succeeded: success
-    });
-
-    return { attempted: ordered.length, succeeded: success };
-  }, [activeConsultation, activeConsultationId, persistFinalSegment]);
 
   const prepareSegmentForUi = useCallback((raw) => {
     if (!raw) return null;
@@ -145,7 +104,6 @@ export const useAudioRecording = (
       interimSpeaker: null
     });
 
-    // Persist via backend API (no entities)
     await persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
   }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
@@ -193,14 +151,29 @@ export const useAudioRecording = (
     });
 
     try {
-      const ws = new WebSocket(
-        `ws://localhost:8000/transcribe/alibaba`
-        //`${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
-      );
+      // Build WS URL: prefer env var; otherwise derive from API URL with correct protocol.
+      const buildWsUrl = () => {
+        if (BACKEND_WS_URL) return BACKEND_WS_URL;
+        if (BACKEND_API_URL) {
+          const api = new URL(BACKEND_API_URL);
+          const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          return `${wsProto}//${api.host}/client-transcribe`;
+        }
+        // Fallback (dev): localhost client-transcribe
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${wsProto}//localhost:8000/client-transcribe`;
+      };
+
+      const url = new URL(buildWsUrl());
+      if (activeConsultation.language) {
+        url.searchParams.set('language_code', activeConsultation.language);
+      }
+
+      const ws = new WebSocket(url.toString());
       websocketRef.current = ws;
 
       ws.onopen = () => {
-        console.info("[useAudioRecording] WebSocket connection established");
+        console.info("[useAudioRecording] WebSocket connection established", url.toString());
         updateConsultation(activeConsultationId, { connectionStatus: 'connected' });
         startMicrophone();
       };
@@ -210,15 +183,6 @@ export const useAudioRecording = (
           const data = JSON.parse(event.data);
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
-
-          console.log(
-            '[DEBUG WS] ResultIds:',
-            (data.Transcript?.Results ?? []).map(r => r.ResultId),
-            'IsPartial:',
-            (data.Transcript?.Results ?? []).map(r => r.IsPartial),
-            'Debug:',
-            data._debug || null
-          );
 
           const segmentsToPersist = [];
 
@@ -285,7 +249,6 @@ export const useAudioRecording = (
             );
           });
 
-          // Persist finalized segments (no entities) via backend API
           for (const { ui, sequenceNumber, detectedLanguage } of segmentsToPersist) {
             // eslint-disable-next-line no-await-in-loop
             await persistFinalSegment(ui, sequenceNumber, detectedLanguage);
@@ -336,24 +299,19 @@ export const useAudioRecording = (
     updateConsultation(activeConsultationId, { sessionState: 'recording' });
   }, [activeConsultationId, updateConsultation]);
 
-  // ----------- FIX: Move handleGenerateNote above stopSession -----------
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
     if (!activeConsultation) return;
     const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
 
-    // If the selected type is a template reference (e.g. "template:<uuid>"),
-    // extract the template id and use a sensible base note_type (standard) for the prompt module.
     let templateId = null;
     let noteTypeToUse = rawSelectedType;
 
     if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
       const parts = rawSelectedType.split(":", 2);
       templateId = parts[1] ?? null;
-      // choose a base note_type for prompt module — 'standard' is a safe default.
       noteTypeToUse = "standard";
     }
 
-    // Build transcript for generation
     let transcript = '';
     Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
       transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
@@ -364,37 +322,28 @@ export const useAudioRecording = (
       return;
     }
 
-    // Preserve current notes so UI remains usable if generation fails
     const hadExistingNotes = Boolean(activeConsultation.notes);
 
-    // Enter loading state but do not clear existing notes
     updateConsultation(activeConsultationId, { loading: true, error: null });
 
     try {
-      // Prefer the consultation's createdAt (the timestamp logged when recording finished).
-      // Fall back to notesCreatedAt or current time if not available.
       const encounterTime =
         activeConsultation.createdAt ||
         activeConsultation.notesCreatedAt ||
         new Date().toISOString();
 
-      // Build patient_info object for the backend/prompt
       const profile = activeConsultation.patientProfile || {};
       const patientInfo = {};
 
       if (profile.name) patientInfo.name = profile.name;
       if (profile.sex) patientInfo.sex = profile.sex;
       if (profile.dateOfBirth) {
-        // calculateAge returns number or null; prompt expects an age string/number
         try {
           const ageVal = calculateAge(profile.dateOfBirth);
           if (ageVal !== null && ageVal !== undefined) {
-            // convert to string to keep payload simple (backend accepts either)
             patientInfo.age = String(ageVal);
           }
-        } catch (e) {
-          // ignore if date parsing fails
-        }
+        } catch {}
       }
       if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
       if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
@@ -404,11 +353,7 @@ export const useAudioRecording = (
         note_type: noteTypeToUse,
         encounter_time: encounterTime,
       };
-
-      // attach template id if selecting a custom template
       if (templateId) requestBody.template_id = templateId;
-
-      // attach patient_info only if we have any meaningful keys
       if (Object.keys(patientInfo).length > 0) {
         requestBody.patient_info = patientInfo;
       }
@@ -426,7 +371,7 @@ export const useAudioRecording = (
 
       updateConsultation(activeConsultationId, {
         notes: data.notes,
-        noteType: rawSelectedType, // preserve the literal selected type in UI state (so template:... remains)
+        noteType: rawSelectedType,
         noteId: activeConsultationId,
         notesCreatedAt: new Date().toISOString(),
         notesUpdatedAt: new Date().toISOString(),
@@ -447,7 +392,6 @@ export const useAudioRecording = (
       }
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
-  // ----------- END FIXED POSITION -----------
 
   const stopSession = useCallback(async (closeSocket = true) => {
     if (!activeConsultation) return;
@@ -480,7 +424,6 @@ export const useAudioRecording = (
       await finalizeInterimSegment();
     }
 
-    // Generate note ONLY ONCE, right after segments are finalized
     try {
       if (activeConsultation.transcriptSegments.size > 0) {
         await handleGenerateNote();
@@ -489,13 +432,8 @@ export const useAudioRecording = (
       console.error("[useAudioRecording] Note generation failed (patch order):", err);
     }
 
-    // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
     try {
       const localCount = activeConsultation.transcriptSegments.size;
-      console.info("[useAudioRecording] Stop session: persistedCount vs localCount", {
-        persistedCount: persistedCountRef.current,
-        localCount
-      });
 
       if (localCount > 0) {
         const res = await apiClient.listTranscriptSegments({
@@ -504,17 +442,8 @@ export const useAudioRecording = (
           signal: undefined
         });
         const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
-        console.info("[useAudioRecording] Server segment count at stop", {
-          consultationId: activeConsultationId,
-          serverCount
-        });
 
         if (serverCount < localCount) {
-          console.warn("[useAudioRecording] Detected missing server segments. Backfilling…", {
-            consultationId: activeConsultationId,
-            serverCount,
-            localCount
-          });
           await persistAllSegments();
         }
       }
@@ -522,29 +451,32 @@ export const useAudioRecording = (
       console.error("[useAudioRecording] Backfill check failed:", err);
     }
 
-    // Fire-and-forget enrichment cache to speed up subsequent loads
     try {
-      console.info("[useAudioRecording] Kicking off enrichment cache for consultation", {
-        consultationId: activeConsultationId
-      });
       apiClient
         .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
-        .then((r) => {
-          console.info("[useAudioRecording] Enrichment cache request completed", {
-            consultationId: activeConsultationId,
-            status: r?.status,
-            ok: r?.ok
-          });
-        })
+        .then(() => {})
         .catch((e) => {
           console.warn("[useAudioRecording] Enrichment cache request failed", e);
         });
-    } catch (e) {
-      console.warn("[useAudioRecording] Failed to start enrichment caching", e);
-    }
+    } catch (e) {}
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments, handleGenerateNote]);
 
-  // Optional dev debug
+  const persistAllSegments = useCallback(async () => {
+    if (!activeConsultation) return { attempted: 0, succeeded: 0 };
+    const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
+      seg,
+      seq: idx
+    }));
+
+    let success = 0;
+    for (const { seg, seq } of ordered) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
+      if (ok) success += 1;
+    }
+    return { attempted: ordered.length, succeeded: success };
+  }, [activeConsultation, activeConsultationId, persistFinalSegment]);
+
   const debugTranscriptSegments = useCallback(() => {}, []);
 
   return {
