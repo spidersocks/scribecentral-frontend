@@ -1,7 +1,12 @@
 export const BACKEND_WS_URL =
-  import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:8000/client-transcribe";
+  import.meta.env.VITE_BACKEND_WS_URL || "";
+
 export const BACKEND_API_URL =
   import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
+
+// In production, set:
+// VITE_BACKEND_WS_URL = wss://api.scribecentral.io/client-transcribe
+// VITE_BACKEND_API_URL = https://api.scribecentral.io
 
 export const DEFAULT_NOTE_TYPES = [
   { id: "standard", name: "Standard Clinical Note" },
