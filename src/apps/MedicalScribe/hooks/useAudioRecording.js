@@ -107,6 +107,93 @@ export const useAudioRecording = (
     await persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
   }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
+  // MOVE UP: persistAllSegments must be initialized before stopSession uses it
+  const persistAllSegments = useCallback(async () => {
+    if (!activeConsultation) return { attempted: 0, succeeded: 0 };
+    const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
+      seg,
+      seq: idx
+    }));
+
+    let success = 0;
+    for (const { seg, seq } of ordered) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
+      if (ok) success += 1;
+    }
+    return { attempted: ordered.length, succeeded: success };
+  }, [activeConsultation, activeConsultationId, persistFinalSegment]);
+
+  // MOVE UP: stopSession must be available for startMicrophone catch
+  const stopSession = useCallback(async (closeSocket = true) => {
+    if (!activeConsultation) return;
+    if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
+      return;
+    }
+
+    updateConsultation(activeConsultationId, { sessionState: 'stopped' });
+
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
+      microphoneStreamRef.current = null;
+    }
+    if (audioContextRef.current?.state !== 'closed') {
+      try { await audioContextRef.current?.close(); } catch {}
+    }
+
+    let finalized = false;
+
+    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
+      try {
+        websocketRef.current.send(new ArrayBuffer(0));
+        await new Promise((r) => setTimeout(r, 700));
+        finalized = !activeConsultation.interimTranscript;
+      } catch {}
+      try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
+    }
+
+    if (!finalized) {
+      await finalizeInterimSegment();
+    }
+
+    try {
+      if (activeConsultation.transcriptSegments.size > 0) {
+        await handleGenerateNote();
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Note generation failed (patch order):", err);
+    }
+
+    try {
+      const localCount = activeConsultation.transcriptSegments.size;
+
+      if (localCount > 0) {
+        const res = await apiClient.listTranscriptSegments({
+          token: undefined,
+          consultationId: activeConsultationId,
+          signal: undefined
+        });
+        const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
+
+        if (serverCount < localCount) {
+          await persistAllSegments();
+        }
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Backfill check failed:", err);
+    }
+
+    try {
+      apiClient
+        .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
+        .then(() => {})
+        .catch((e) => {
+          console.warn("[useAudioRecording] Enrichment cache request failed", e);
+        });
+    } catch (e) {}
+  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments]);
+
+  // Now safe: references stopSession in catch
   const startMicrophone = useCallback(async () => {
     if (!activeConsultation) return;
     try {
@@ -137,9 +224,10 @@ export const useAudioRecording = (
         error: 'Could not access microphone. Please check browser permissions.',
         connectionStatus: 'error'
       });
+      // Safe now: stopSession is initialized
       stopSession(false);
     }
-  }, [activeConsultation, activeConsultationId, updateConsultation]);
+  }, [activeConsultation, activeConsultationId, updateConsultation, stopSession]);
 
   const startSession = useCallback(async () => {
     if (!activeConsultation) return;
@@ -287,7 +375,8 @@ export const useAudioRecording = (
     startMicrophone,
     setConsultations,
     prepareSegmentForUi,
-    persistFinalSegment
+    persistFinalSegment,
+    stopSession
   ]);
 
   const handlePause = useCallback(async () => {
@@ -393,91 +482,12 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
-  const stopSession = useCallback(async (closeSocket = true) => {
-    if (!activeConsultation) return;
-    if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
-      return;
-    }
-
-    updateConsultation(activeConsultationId, { sessionState: 'stopped' });
-
-    if (microphoneStreamRef.current) {
-      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
-      microphoneStreamRef.current = null;
-    }
-    if (audioContextRef.current?.state !== 'closed') {
-      try { await audioContextRef.current?.close(); } catch {}
-    }
-
-    let finalized = false;
-
-    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
-      try {
-        websocketRef.current.send(new ArrayBuffer(0));
-        await new Promise((r) => setTimeout(r, 700));
-        finalized = !activeConsultation.interimTranscript;
-      } catch {}
-      try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
-    }
-
-    if (!finalized) {
-      await finalizeInterimSegment();
-    }
-
-    try {
-      if (activeConsultation.transcriptSegments.size > 0) {
-        await handleGenerateNote();
-      }
-    } catch (err) {
-      console.error("[useAudioRecording] Note generation failed (patch order):", err);
-    }
-
-    try {
-      const localCount = activeConsultation.transcriptSegments.size;
-
-      if (localCount > 0) {
-        const res = await apiClient.listTranscriptSegments({
-          token: undefined,
-          consultationId: activeConsultationId,
-          signal: undefined
-        });
-        const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
-
-        if (serverCount < localCount) {
-          await persistAllSegments();
-        }
-      }
-    } catch (err) {
-      console.error("[useAudioRecording] Backfill check failed:", err);
-    }
-
-    try {
-      apiClient
-        .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
-        .then(() => {})
-        .catch((e) => {
-          console.warn("[useAudioRecording] Enrichment cache request failed", e);
-        });
-    } catch (e) {}
-  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments, handleGenerateNote]);
-
-  const persistAllSegments = useCallback(async () => {
-    if (!activeConsultation) return { attempted: 0, succeeded: 0 };
-    const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
-      seg,
-      seq: idx
-    }));
-
-    let success = 0;
-    for (const { seg, seq } of ordered) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
-      if (ok) success += 1;
-    }
-    return { attempted: ordered.length, succeeded: success };
-  }, [activeConsultation, activeConsultationId, persistFinalSegment]);
-
   const debugTranscriptSegments = useCallback(() => {}, []);
+
+  // NEW: expose a helper used by App.jsx debug button
+  const syncAllTranscriptSegments = useCallback(async () => {
+    return await persistAllSegments();
+  }, [persistAllSegments]);
 
   return {
     startSession,
@@ -486,6 +496,7 @@ export const useAudioRecording = (
     handleResume,
     handleGenerateNote,
     finalizeInterimSegment,
-    debugTranscriptSegments
+    debugTranscriptSegments,
+    syncAllTranscriptSegments
   };
 };
