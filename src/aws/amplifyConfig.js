@@ -1,10 +1,11 @@
 import { Amplify } from 'aws-amplify';
 
-// Use env vars; fall back to origin for redirects
+// Prefer the live origin; fall back to env if needed
 const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN?.replace(/^https?:\/\//, '');
-const redirect = import.meta.env.VITE_COGNITO_REDIRECT_URI || window.location.origin;
+const runtimeOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
+const redirect = runtimeOrigin || import.meta.env.VITE_COGNITO_REDIRECT_URI || "https://scribecentral.io/";
 
-// TEMP DEBUG LOGS — remove after testing
+// DEBUG LOGS
 console.info("[amplifyConfig] window.origin", window.location.origin);
 console.info("[amplifyConfig] VITE_COGNITO_DOMAIN", import.meta.env.VITE_COGNITO_DOMAIN);
 console.info("[amplifyConfig] VITE_COGNITO_REDIRECT_URI", import.meta.env.VITE_COGNITO_REDIRECT_URI);
