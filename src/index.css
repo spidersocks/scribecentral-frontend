@@ -1,4 +1,3 @@
-@import "./styles/tokens.css";
 @import "tailwindcss";
 
 /* Baseline: make the app fill the viewport */
