@@ -1,14 +1,15 @@
 .demoShell {
   min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  /* Use explicit color to avoid missing CSS vars on demo route */
+  background: #f5f7fb; /* light page background */
+  color: #1a202c;       /* primary text */
   display: flex;
   flex-direction: column;
 }
 
 .demoTopBar {
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-color);
+  background: #ffffff; /* white panel */
+  border-bottom: 1px solid #eef2f6;
   padding: 1rem clamp(1rem, 3vw, 2rem);
   display: flex;
   justify-content: space-between;
@@ -28,8 +29,8 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: #f5f7fb;
+  border: 1px solid #eef2f6;
   padding: 0.5rem;
   object-fit: contain;
 }
@@ -45,13 +46,13 @@
   margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #1a202c; /* heading color */
 }
 
 .topBarSubtitle {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #5a6474; /* secondary text */
   max-width: 32rem;
 }
 
@@ -94,8 +95,8 @@
 
 .panelHeader {
   padding: 1.1rem 1.25rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-panel);
+  border-bottom: 1px solid #eef2f6;
+  background: #ffffff; /* white header */
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -107,13 +108,13 @@
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #1a202c;
 }
 
 .panelSubtitle {
   margin: 0.35rem 0 0;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #5a6474;
   max-width: 28rem;
 }
 
@@ -123,14 +124,14 @@
   gap: 0.35rem;
   padding: 0.25rem;
   border-radius: 0.75rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: #f5f7fb;
+  border: 1px solid #eef2f6;
 }
 
 .modeButton {
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: #5a6474;
   padding: 0.45rem 1rem;
   border-radius: 0.6rem;
   font-weight: 600;
@@ -140,8 +141,8 @@
 }
 
 .modeButton:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: #eef2f7;
+  color: #1a202c;
 }
 
 .modeButtonActive {
@@ -152,8 +153,8 @@
 
 .controlSection {
   padding: 1.25rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-panel);
+  border-bottom: 1px solid #eef2f6;
+  background: #ffffff; /* white controls surface */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
@@ -168,7 +169,7 @@
 .controlLabel {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #5a6474;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -177,11 +178,11 @@
   width: 100%;
   padding: 0.55rem 0.75rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  border: 1px solid #eef2f6;
+  background: #f5f7fb;
   font-size: 0.95rem;
   font-family: var(--font-sans);
-  color: var(--text-primary);
+  color: #1a202c;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -196,8 +197,8 @@
   align-items: center;
   padding: 0.35rem 0.65rem;
   border-radius: 0.5rem;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: #eef2f7;
+  color: #1a202c;
   font-size: 0.85rem;
   font-weight: 600;
   max-width: 100%;
@@ -206,20 +207,20 @@
 .sampleDescription {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: #5a6474;
   line-height: 1.4;
   grid-column: 1 / -1;
 }
 
 .helperBanner {
   padding: 0.85rem 1.25rem;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-color);
+  background: #ffffff; /* match white surface */
+  border-bottom: 1px solid #eef2f6;
   display: flex;
   align-items: center;
   gap: 0.6rem;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: #5a6474;
 }
 
 .helperIcon {
@@ -231,7 +232,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-panel);
+  background: #ffffff; /* white panel behind transcript */
 }
 
 .noteWorkspace {
@@ -239,7 +240,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-panel);
+  background: #ffffff; /* white panel behind notes */
 }
 
 @media (max-width: 1100px) {

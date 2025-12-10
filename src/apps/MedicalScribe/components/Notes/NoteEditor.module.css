@@ -4,8 +4,8 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-panel);
+  border-bottom: 1px solid #eef2f6;
+  background-color: #ffffff; /* white */
   position: sticky;
   top: 0;
   z-index: 5;
@@ -82,7 +82,7 @@
 }
 
 .iconButton:hover {
-  /* keep hover subtle, avoid strong blue highlights per request */
+  /* keep hover subtle */
   background-color: var(--bg-primary);
   border-color: var(--border-color);
   color: var(--text-primary);
@@ -186,7 +186,7 @@
 
 /* End menu styles */
 
-/* note/warning/banner and rest of file preserved below (unchanged) */
+/* note/warning/banner */
 .noteTypeHint {
   display: flex;
   align-items: center;
@@ -216,11 +216,13 @@
   flex-shrink: 0;
 }
 
+/* Notes display surface and text */
 .notesDisplay {
   font-size: 1rem;
   line-height: 1.7;
   padding: 1.25rem;
-  background-color: var(--bg-panel);
+  background-color: #ffffff; /* white surface for note content */
+  color: #1a202c;            /* default text color */
 }
 
 .notesDisplay h3 {
@@ -228,7 +230,7 @@
   font-weight: 600;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
-  color: var(--text-primary);
+  color: #1a202c; /* heading color */
 }
 
 .notesDisplay h3:first-child {
@@ -237,14 +239,14 @@
 
 .notesDisplay p {
   margin: 0.5rem 0;
-  color: var(--text-primary);
+  color: #1a202c; /* paragraph text */
 }
 
 .notesDisplay ul {
   list-style: none;
   padding-left: 1rem;
   margin: 0.5rem 0;
-  border-left: 2px solid var(--accent-secondary);
+  border-left: 2px solid #34c759; /* accent green */
 }
 
 .notesDisplay ul li {
@@ -252,11 +254,12 @@
   padding-left: 1.25rem;
   margin-bottom: 0.5rem;
   overflow-wrap: break-word;
+  color: #1a202c; /* ensure list item text isn't white */
 }
 
 .notesDisplay ul li::before {
   content: "•";
-  color: var(--accent-secondary);
+  color: #34c759; /* green bullet */
   font-weight: bold;
   position: absolute;
   left: 0;
@@ -279,6 +282,7 @@
   font-size: 0.95rem;
 }
 
+/* Rich editor toolbar */
 .richEditorToolbar {
   display: flex;
   align-items: center;
@@ -388,6 +392,7 @@
   transform: translateY(0);
 }
 
+/* Rich editor content surface */
 .richEditorContent {
   flex: 1;
   overflow-y: auto;
@@ -397,10 +402,11 @@
   line-height: 1.7;
   outline: none;
   min-height: 100%;
-  background-color: var(--bg-panel);
-  color: var(--text-primary);
+  background-color: #ffffff; /* editor surface */
+  color: #1a202c;            /* editor text */
 }
 
+/* Empty note state */
 .emptyNote {
   display: flex;
   flex-direction: column;

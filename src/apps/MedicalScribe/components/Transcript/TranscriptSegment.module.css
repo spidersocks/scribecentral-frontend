@@ -3,13 +3,14 @@
 }
 
 .originalTranscriptText {
-  color: var(--text-secondary);
+  color: #5a6474; /* secondary text for original-language line */
   font-size: 0.9em;
   margin-bottom: 0.2em; /* slightly tighter */
 }
 
 .englishOnlyTranscript {
   margin-bottom: 0.45em; /* reduced from 0.85em */
+  color: #1a202c; /* ensure primary text for English-only lines */
 }
 
 .speakerLabelClickable {
@@ -22,7 +23,7 @@
   align-items: center;
   line-height: 1.2;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #1a202c; /* speaker label readable */
 }
 
 .speakerLabelClickable:hover {
@@ -31,5 +32,6 @@
 
 .translatedTranscriptText {
   padding-left: 1rem;
-  border-left: 2px solid var(--border-color);
+  border-left: 2px solid #eef2f6;
+  color: #1a202c; /* translated line readable */
 }
