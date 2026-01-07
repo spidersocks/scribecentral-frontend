@@ -411,6 +411,7 @@
   justify-content: center;
   transition: all 0.2s;
   pointer-events: auto;
+  color: var(--text-primary); /* ADD THIS LINE - makes icons black by default */
 }
 
 .editIconWrapper:hover {
@@ -419,8 +420,13 @@
 }
 
 .deleteIconWrapper:hover {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color:  rgba(239, 68, 68, 0.1);
   color: #ef4444;
+}
+
+.deleteConfirmationModal.modal-body p:first-child {
+  color:  var(--text-primary);
+  margin: 0;
 }
 
 .addConsultationButtonInline {
@@ -600,8 +606,7 @@
 
 .modalWarningText {
   font-size: 0.95rem;
-  color: #6b7280;
-  margin: 0.75rem 0 0;
+  color: var(--text-primary); 
 }
 
 .buttonDanger {
