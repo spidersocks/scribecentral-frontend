@@ -437,6 +437,16 @@ export const useAudioRecording = (
 
     if (!activeConsultation) return;
     const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
+
+    let templateId = null;
+    let noteTypeToUse = rawSelectedType;
+
+    if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
+      const parts = rawSelectedType.split(":", 2);
+      templateId = parts[1] ?? null;
+      noteTypeToUse = "standard";
+    }
+
     // ... setup ...
     let transcript = '';
     Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
@@ -454,12 +464,33 @@ export const useAudioRecording = (
     try {
       // ... payload setup ...
       const encounterTime = activeConsultation.createdAt || new Date().toISOString();
+      
+      const profile = activeConsultation.patientProfile || {};
+      const patientInfo = {};
+
+      if (profile.name) patientInfo.name = profile.name;
+      if (profile.sex) patientInfo.sex = profile.sex;
+      if (profile.dateOfBirth) {
+        try {
+          const ageVal = calculateAge(profile.dateOfBirth);
+          if (ageVal !== null && ageVal !== undefined) {
+            patientInfo.age = String(ageVal);
+          }
+        } catch {}
+      }
+      if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
+      if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
+
       const requestBody = {
+        consultation_id: activeConsultationId,
         full_transcript: transcript,
-        note_type: noteTypeOverride || activeConsultation.noteType || "standard",
+        note_type: noteTypeToUse,
         encounter_time: encounterTime,
-        // ... other fields
       };
+      if (templateId) requestBody.template_id = templateId;
+      if (Object.keys(patientInfo).length > 0) {
+        requestBody.patient_info = patientInfo;
+      }
       
       // Update: Use apiClient if available or fetch with auth header
       // For now, patching fetch to include auth
@@ -486,10 +517,17 @@ export const useAudioRecording = (
         notesUpdatedAt: new Date().toISOString(),
         loading: false
       });
-      // ...
+      
+      if (finalizeConsultationTimestamp) {
+        finalizeConsultationTimestamp(activeConsultationId);
+      }
     } catch (err) {
       console.error("[useAudioRecording] Failed to generate final note:", err);
       updateConsultation(activeConsultationId, { loading: false });
+
+      if (!hadExistingNotes) {
+        console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
+      }
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp, accessToken]);
 
