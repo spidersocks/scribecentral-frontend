@@ -88,7 +88,7 @@ const mapSegmentsToUiMap = (consultationId, items) => {
     .map((seg) => {
       const wireId = seg.segment_id ?? seg.id;
       const id = wireId ? String(wireId) : `${consultationId}-seq-${seg.sequence_number ?? 0}`;
-      const speaker = seg.speaker_label ?? null;
+      const speaker = seg.speaker_role ?? seg.speaker_label ?? null;
       const original = seg.original_text ?? "";
       const translated = seg.translated_text ?? null;
       const entities = Array.isArray(seg.entities) ? seg.entities : [];

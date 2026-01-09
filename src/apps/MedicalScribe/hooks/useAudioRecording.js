@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { BACKEND_WS_URL, BACKEND_API_URL, ENABLE_BACKGROUND_SYNC } from '../utils/constants';
 import { getAssetPath, getFriendlySpeakerLabel, calculateAge, to16BitPCM } from '../utils/helpers';
 import { apiClient } from "../utils/apiClient";
@@ -488,6 +488,80 @@ export const useAudioRecording = (
   const syncAllTranscriptSegments = useCallback(async () => {
     return await persistAllSegments();
   }, [persistAllSegments]);
+
+  // Polling for speaker diarization updates (Semantic Diarization)
+  useEffect(() => {
+    const isSessionActive = 
+      activeConsultation?.sessionState === 'recording' || 
+      activeConsultation?.sessionState === 'paused';
+
+    if (!activeConsultationId || !isSessionActive) return;
+
+    const POLL_INTERVAL = 5000; // 5 seconds
+
+    const poll = async () => {
+      try {
+        // Fetch latest segments to get updated speaker labels
+        const res = await apiClient.listTranscriptSegments({
+          consultationId: activeConsultationId,
+          includeEntities: false 
+        });
+
+        if (res.ok && Array.isArray(res.data)) {
+          setConsultations(prevConsultations => {
+            return prevConsultations.map(c => {
+              if (c.id !== activeConsultationId) return c;
+
+              const localMap = c.transcriptSegments;
+              let hasChanges = false;
+              // Clone map to allow mutation
+              const newMap = new Map(localMap);
+
+              res.data.forEach(remoteSeg => {
+                // Backend might return snake_case or different ID fields
+                const rawId = remoteSeg.segment_id ?? remoteSeg.id;
+                
+                // Skip if ID is missing
+                if (!rawId) return;
+                
+                // Convert to string to match local segment ID format (same as mapSegmentsToUiMap)
+                const remoteId = String(rawId);
+                
+                // Only update if we already have this segment (don't add new ones via poll to avoid conflict with WS)
+                if (newMap.has(remoteId)) {
+                  const localSeg = newMap.get(remoteId);
+                  
+                  // Prefer speaker_role (e.g. "Doctor"), fall back to speaker_label, then speaker
+                  const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
+                  
+                  // If remote has a label and it's different from local, update it
+                  if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
+                    newMap.set(remoteId, {
+                      ...localSeg,
+                      speaker: remoteSpeaker
+                    });
+                    hasChanges = true;
+                  }
+                }
+              });
+
+              if (!hasChanges) return c;
+              
+              return {
+                ...c,
+                transcriptSegments: newMap
+              };
+            });
+          });
+        }
+      } catch (err) {
+        console.debug("[useAudioRecording] Speaker poll error", err);
+      }
+    };
+
+    const intervalId = setInterval(poll, POLL_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, [activeConsultationId, activeConsultation?.sessionState, setConsultations]);
 
   return {
     startSession,
