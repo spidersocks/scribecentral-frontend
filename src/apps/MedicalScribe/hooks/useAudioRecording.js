@@ -521,6 +521,9 @@ export const useAudioRecording = (
                 // Backend might return snake_case or different ID fields
                 const remoteId = remoteSeg.segment_id ?? remoteSeg.id;
                 
+                // Skip if ID is missing
+                if (!remoteId) return;
+                
                 // Only update if we already have this segment (don't add new ones via poll to avoid conflict with WS)
                 if (newMap.has(remoteId)) {
                   const localSeg = newMap.get(remoteId);
