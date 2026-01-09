@@ -31,6 +31,7 @@ export const useAudioRecording = (
   }
 
   // Persist a finalized segment to the backend (no entities)
+  // FIXED: Now swaps the temporary WebSocket ID with the permanent Backend ID on success.
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
     try {
       const payload = {
@@ -58,13 +59,43 @@ export const useAudioRecording = (
         });
         return false;
       }
+
+      // --- ID SWAP LOGIC START ---
+      // The segment currently exists in our local Map under `segment.id` (WS ResultId).
+      // The backend has just returned the authoritative ID (UUID).
+      // We must update the local Map to use the authoritative ID so that polling updates (Diarization)
+      // can correctly find and update this segment later.
+      const backendId = res.data?.id ?? res.data?.segment_id;
+      
+      if (backendId && String(backendId) !== String(segment.id)) {
+        setConsultations((prev) => prev.map((c) => {
+          if (c.id !== activeConsultationId) return c;
+          const oldMap = c.transcriptSegments;
+          if (!oldMap.has(segment.id)) return c;
+
+          // Rebuild the map to preserve insertion order (critical for transcript display flow)
+          const newMap = new Map();
+          for (const [key, val] of oldMap) {
+            if (key === segment.id) {
+              // Replace key with backendId, and update the object's ID field
+              const updatedVal = { ...val, id: String(backendId) };
+              newMap.set(String(backendId), updatedVal);
+            } else {
+              newMap.set(key, val);
+            }
+          }
+          return { ...c, transcriptSegments: newMap };
+        }));
+      }
+      // --- ID SWAP LOGIC END ---
+
       persistedCountRef.current += 1;
       return true;
     } catch (e) {
       console.error("[useAudioRecording] Failed to persist transcript segment:", e);
       return false;
     }
-  }, [activeConsultationId]);
+  }, [activeConsultationId, setConsultations]);
 
   const prepareSegmentForUi = useCallback((raw) => {
     if (!raw) return null;
