@@ -122,7 +122,6 @@ const mapSegmentsToUiMap = (consultationId, items) => {
  * Custom hook for managing medical consultations, patients, and persistence
  */
 export const useConsultations = (ownerUserId = null) => {
-  console.info("[useConsultations] hook mount ownerUserId =", ownerUserId);
   const safeOwnerUserId = ownerUserId ?? null;
 
   const [appState, setAppState] = useState(() => {

@@ -36,11 +36,11 @@ class SyncQueue {
 
   enqueue(task, meta = {}) {
     const callerStack = new Error().stack?.split("\n").slice(2, 6).join("\n") ?? "";
-    console.info("[sync][queue] enqueue called", { label: meta.label ?? "task", meta, ENABLE_BACKGROUND_SYNC });
+    logDebug("[sync][queue] enqueue called", { label: meta.label ?? "task", meta, ENABLE_BACKGROUND_SYNC });
     logDebug("[sync][queue] enqueue caller", callerStack);
 
     if (!ENABLE_BACKGROUND_SYNC) {
-      console.info("[sync][queue] enqueue skipped - background sync disabled", { meta });
+      logDebug("[sync][queue] enqueue skipped - background sync disabled", { meta });
       return;
     }
 
@@ -54,41 +54,41 @@ class SyncQueue {
 
     this.items.push(wrapped);
     this.stats.total++;
-    console.info("[sync][queue] queued", meta.label ?? "task", "pending=", this.items.length, "totalEnqueued=", this.stats.total);
+    logDebug("[sync][queue] queued", meta.label ?? "task", "pending=", this.items.length, "totalEnqueued=", this.stats.total);
     logDebug("[sync][queue] queue snapshot", this.items.map(i => ({ label: i.meta.label, retryCount: i.retryCount })));
   }
 
   async flushAll(reason = "unspecified") {
     if (!ENABLE_BACKGROUND_SYNC) {
-      console.info("[sync][queue] flush skipped because background sync disabled");
+      logDebug("[sync][queue] flush skipped because background sync disabled");
       return;
     }
 
     if (this.flushing) {
-      console.info("[sync][queue] flush skipped (already flushing)", { reason });
+      logDebug("[sync][queue] flush skipped (already flushing)", { reason });
       return;
     }
 
     if (this.items.length === 0) {
-      console.info("[sync][queue] flush skipped (empty queue)", { reason });
+      logDebug("[sync][queue] flush skipped (empty queue)", { reason });
       return;
     }
 
     this.flushing = true;
-    console.info("[sync][queue] flush start", { reason, pending: this.items.length, stats: this.stats });
+    logDebug("[sync][queue] flush start", { reason, pending: this.items.length, stats: this.stats });
 
     try {
       const failedItems = [];
 
       while (this.items.length > 0) {
         const item = this.items.shift();
-        console.info("[sync][queue] executing task", item.meta.label ?? "task", "remaining=", this.items.length, "retryCount=", item.retryCount);
+        logDebug("[sync][queue] executing task", item.meta.label ?? "task", "remaining=", this.items.length, "retryCount=", item.retryCount);
 
         try {
           // eslint-disable-next-line no-await-in-loop
           await item.run();
           this.stats.success++;
-          console.info("[sync][queue] task completed", item.meta.label ?? "task");
+          logDebug("[sync][queue] task completed", item.meta.label ?? "task");
         } catch (error) {
           console.error("[sync][queue] task failed", { label: item.meta.label, error, retryCount: item.retryCount, callerStack: item.callerStack });
 
@@ -108,11 +108,11 @@ class SyncQueue {
 
       if (failedItems.length > 0) {
         this.items.push(...failedItems);
-        console.info("[sync][queue] re-queued failed items", { count: failedItems.length, pendingNow: this.items.length });
+        logDebug("[sync][queue] re-queued failed items", { count: failedItems.length, pendingNow: this.items.length });
       }
     } finally {
       this.flushing = false;
-      console.info("[sync][queue] flush complete", { reason, stats: this.stats, pendingItems: this.items.length });
+      logDebug("[sync][queue] flush complete", { reason, stats: this.stats, pendingItems: this.items.length });
     }
   }
 
@@ -134,10 +134,10 @@ function safeSendPut(tableName, item, debugLabel) {
       console.warn("[sync][dynamodb] PutItem skipped: dynamoClient unavailable", { tableName, debugLabel });
       return;
     }
-    console.info("[sync][dynamodb] PutItem start", { tableName, debugLabel });
+    logDebug("[sync][dynamodb] PutItem start", { tableName, debugLabel });
     try {
       await dynamoClient.send(new PutItemCommand({ TableName: tableName, Item: item }));
-      console.info("[sync][dynamodb] PutItem success", { tableName, debugLabel });
+      logDebug("[sync][dynamodb] PutItem success", { tableName, debugLabel });
     } catch (err) {
       console.error("[sync][dynamodb] PutItem error", { tableName, debugLabel, error: err });
       throw err;
@@ -151,10 +151,10 @@ function safeSendDelete(tableName, key, debugLabel) {
       console.warn("[sync][dynamodb] DeleteItem skipped: dynamoClient unavailable", { tableName, debugLabel });
       return;
     }
-    console.info("[sync][dynamodb] DeleteItem start", { tableName, debugLabel });
+    logDebug("[sync][dynamodb] DeleteItem start", { tableName, debugLabel });
     try {
       await dynamoClient.send(new DeleteItemCommand({ TableName: tableName, Key: key }));
-      console.info("[sync][dynamodb] DeleteItem success", { tableName, debugLabel });
+      logDebug("[sync][dynamodb] DeleteItem success", { tableName, debugLabel });
     } catch (err) {
       console.error("[sync][dynamodb] DeleteItem error", { tableName, debugLabel, error: err });
       throw err;
@@ -168,10 +168,10 @@ function safeBatchWrite(requestItems, debugLabel) {
       console.warn("[sync][dynamodb] BatchWrite skipped: dynamoClient unavailable", { debugLabel });
       return;
     }
-    console.info("[sync][dynamodb] BatchWrite start", { debugLabel });
+    logDebug("[sync][dynamodb] BatchWrite start", { debugLabel });
     try {
       await dynamoClient.send(new BatchWriteItemCommand({ RequestItems: requestItems }));
-      console.info("[sync][dynamodb] BatchWrite success", { debugLabel });
+      logDebug("[sync][dynamodb] BatchWrite success", { debugLabel });
     } catch (err) {
       console.error("[sync][dynamodb] BatchWrite error", { debugLabel, error: err });
       throw err;
@@ -184,7 +184,7 @@ console.info("[sync] AWS_REGION", AWS_REGION);
 
 const syncService = {
   enqueuePatientUpsert(patient) {
-    console.info("[syncService] enqueuePatientUpsert invoked", { id: patient?.id, ownerUserId: patient?.ownerUserId });
+    logDebug("[syncService] enqueuePatientUpsert invoked", { id: patient?.id, ownerUserId: patient?.ownerUserId });
     queue.enqueue(
       safeSendPut("medical-scribe-patients", {
         id: { S: patient.id },
@@ -206,7 +206,7 @@ const syncService = {
   },
 
   enqueuePatientDeletion(patientId, ownerUserId) {
-    console.info("[syncService] enqueuePatientDeletion invoked", { patientId, ownerUserId });
+    logDebug("[syncService] enqueuePatientDeletion invoked", { patientId, ownerUserId });
     queue.enqueue(
       safeSendDelete("medical-scribe-patients", { id: { S: patientId } }, `delete-patient:${patientId}`),
       { label: `delete-patient:${patientId}`, type: "delete:patient", ownerUserId }
@@ -214,7 +214,7 @@ const syncService = {
   },
 
   enqueueConsultationUpsert(consultation) {
-    console.info("[syncService] enqueueConsultationUpsert invoked", { id: consultation?.id, ownerUserId: consultation?.ownerUserId });
+    logDebug("[syncService] enqueueConsultationUpsert invoked", { id: consultation?.id, ownerUserId: consultation?.ownerUserId });
     queue.enqueue(
       safeSendPut("medical-scribe-consultations", {
         id: { S: consultation.id },
@@ -245,7 +245,7 @@ const syncService = {
   },
 
   enqueueConsultationDeletion(consultationId, ownerUserId) {
-    console.info("[syncService] enqueueConsultationDeletion invoked", { consultationId, ownerUserId });
+    logDebug("[syncService] enqueueConsultationDeletion invoked", { consultationId, ownerUserId });
     queue.enqueue(
       safeSendDelete("medical-scribe-consultations", { id: { S: consultationId } }, `delete-consultation:${consultationId}`),
       { label: `delete-consultation:${consultationId}`, type: "delete:consultation", ownerUserId }
@@ -253,7 +253,7 @@ const syncService = {
   },
 
   enqueueClinicalNote(note) {
-    console.info("[syncService] enqueueClinicalNote invoked", { id: note?.id, ownerUserId: note?.ownerUserId });
+    logDebug("[syncService] enqueueClinicalNote invoked", { id: note?.id, ownerUserId: note?.ownerUserId });
     const item = {
       id: { S: note.id },
       ownerUserId: { S: note.ownerUserId },
@@ -275,7 +275,7 @@ const syncService = {
   },
 
   enqueueClinicalNoteDeletion(noteId, ownerUserId) {
-    console.info("[syncService] enqueueClinicalNoteDeletion invoked", { noteId, ownerUserId });
+    logDebug("[syncService] enqueueClinicalNoteDeletion invoked", { noteId, ownerUserId });
     queue.enqueue(
       safeSendDelete("medical-scribe-clinical-notes", { id: { S: noteId } }, `delete-clinical-note:${noteId}`),
       { label: `delete-clinical-note:${noteId}`, type: "delete:clinical-note", ownerUserId }
@@ -287,7 +287,7 @@ const syncService = {
       console.warn("[syncService] enqueueTemplateUpsert skipped - missing template.id", template);
       return;
     }
-    console.info("[syncService] enqueueTemplateUpsert invoked", { id: template.id, ownerUserId: template.ownerUserId });
+    logDebug("[syncService] enqueueTemplateUpsert invoked", { id: template.id, ownerUserId: template.ownerUserId });
     const item = {
       id: { S: template.id },
       ownerUserId: { S: template.ownerUserId },
@@ -306,7 +306,7 @@ const syncService = {
 
   enqueueTemplateDeletion(templateId, ownerUserId) {
     if (!templateId) return;
-    console.info("[syncService] enqueueTemplateDeletion invoked", { templateId, ownerUserId });
+    logDebug("[syncService] enqueueTemplateDeletion invoked", { templateId, ownerUserId });
     queue.enqueue(
       safeSendDelete("medical-scribe-templates", { id: { S: templateId } }, `delete-template:${templateId}`),
       { label: `delete-template:${templateId}`, type: "delete:template", ownerUserId }
@@ -314,10 +314,10 @@ const syncService = {
   },
 
   enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
-    console.info("[syncService] enqueueTranscriptSegments", { consultationId, segmentsLength: segments?.length, startingIndex, ownerUserId });
+    logDebug("[syncService] enqueueTranscriptSegments", { consultationId, segmentsLength: segments?.length, startingIndex, ownerUserId });
 
     if (!ENABLE_BACKGROUND_SYNC || !segments?.length) {
-      console.info("[syncService] enqueueTranscriptSegments skipped (disabled or empty)");
+      logDebug("[syncService] enqueueTranscriptSegments skipped (disabled or empty)");
       return;
     }
     if (!ownerUserId) {
@@ -375,7 +375,7 @@ const syncService = {
       }
 
       const debugLabel = `segments:${consultationId}:${startingIndex + i}-${startingIndex + i + batchItems.length - 1}`;
-      console.info("[syncService] enqueueing segments batch", { debugLabel, batchSize: batchItems.length });
+      logDebug("[syncService] enqueueing segments batch", { debugLabel, batchSize: batchItems.length });
 
       queue.enqueue(
         safeBatchWrite({ "medical-scribe-transcript-segments": batchItems }, debugLabel),
@@ -385,7 +385,7 @@ const syncService = {
   },
 
   enqueueSegmentDeletion(segmentId, consultationId, ownerUserId) {
-    console.info("[syncService] enqueueSegmentDeletion invoked", { segmentId, consultationId, ownerUserId });
+    logDebug("[syncService] enqueueSegmentDeletion invoked", { segmentId, consultationId, ownerUserId });
     queue.enqueue(
       safeSendDelete("medical-scribe-transcript-segments", { segmentId: { S: segmentId } }, `delete-segment:${segmentId}`),
       { label: `delete-segment:${segmentId}`, type: "delete:segment", ownerUserId }
