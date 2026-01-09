@@ -519,10 +519,13 @@ export const useAudioRecording = (
 
               res.data.forEach(remoteSeg => {
                 // Backend might return snake_case or different ID fields
-                const remoteId = remoteSeg.segment_id ?? remoteSeg.id;
+                const rawId = remoteSeg.segment_id ?? remoteSeg.id;
                 
                 // Skip if ID is missing
-                if (!remoteId) return;
+                if (!rawId) return;
+                
+                // Convert to string to match local segment ID format (same as mapSegmentsToUiMap)
+                const remoteId = String(rawId);
                 
                 // Only update if we already have this segment (don't add new ones via poll to avoid conflict with WS)
                 if (newMap.has(remoteId)) {
