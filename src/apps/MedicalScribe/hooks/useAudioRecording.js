@@ -545,26 +545,17 @@ export const useAudioRecording = (
         });
 
         if (res.ok && Array.isArray(res.data)) {
-          // Log sample of first remote segment to verify property names
-          if (res.data.length > 0) {
-            console.debug("[useAudioRecording][poll] Sample remote segment:", {
-              segment_id: res.data[0].segment_id,
-              id: res.data[0].id,
-              sequence_number: res.data[0].sequence_number,
-              speaker_role: res.data[0].speaker_role,
-              speaker_label: res.data[0].speaker_label,
-              speaker: res.data[0].speaker,
-              has_text: !!res.data[0].original_text || !!res.data[0].text
-            });
-          }
-
-          let polledCount = 0;
-          let matchedCount = 0;
-          let updatedCount = 0;
-          let unmatchedSegments = [];
+          // Log raw fetch to confirm data arrival independent of matching
+          const remoteSegments = res.data;
+          // console.debug(`[useAudioRecording][poll] Received ${remoteSegments.length} segments from backend.`);
 
           setConsultations(prevConsultations => {
-            return prevConsultations.map(c => {
+            let polledCount = remoteSegments.length;
+            let matchedCount = 0;
+            let updatedCount = 0;
+            let unmatchedSegments = [];
+
+            const result = prevConsultations.map(c => {
               if (c.id !== activeConsultationId) return c;
 
               const localMap = c.transcriptSegments;
@@ -573,9 +564,6 @@ export const useAudioRecording = (
               const newMap = new Map(localMap);
 
               // Build a sequence lookup for fallback matching
-              // This is critical because live segments (WebSocket) usually have a different ID 
-              // than backend segments until the swap happens. 
-              // _sequence is the robust invariant.
               const seqToId = new Map();
               for (const [id, seg] of newMap.entries()) {
                 if (typeof seg._sequence === 'number') {
@@ -583,31 +571,20 @@ export const useAudioRecording = (
                 }
               }
 
-              res.data.forEach(remoteSeg => {
-                polledCount++;
-
-                // Backend might return snake_case or different ID fields
+              remoteSegments.forEach(remoteSeg => {
                 const rawId = remoteSeg.segment_id ?? remoteSeg.id;
                 
                 // Skip if ID is missing
-                if (!rawId) {
-                  console.warn("[useAudioRecording][poll] Remote segment missing ID:", remoteSeg);
-                  return;
-                }
+                if (!rawId) return;
                 
-                // Convert to string to match local segment ID format (same as mapSegmentsToUiMap)
                 const remoteId = String(rawId);
                 
                 // 1. Try matching by ID (Backend ID)
-                // This works if the "ID swap" in persistFinalSegment has already happened.
                 let localId = newMap.has(remoteId) ? remoteId : null;
-                let matchMethod = localId ? 'id' : null;
 
                 // 2. Fallback: Try matching by sequence number
-                // This handles cases where ID swap hasn't happened yet or we have a WebSocket ID.
                 if (!localId && typeof remoteSeg.sequence_number === 'number') {
                   localId = seqToId.get(remoteSeg.sequence_number);
-                  if (localId) matchMethod = 'sequence';
                 }
 
                 if (localId) {
@@ -619,14 +596,6 @@ export const useAudioRecording = (
                   
                   // If remote has a label and it's different from local, update it
                   if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
-                    console.debug("[useAudioRecording][poll] Updating speaker:", {
-                      localId,
-                      matchMethod,
-                      oldSpeaker: localSeg.speaker,
-                      newSpeaker: remoteSpeaker,
-                      remoteId,
-                      sequence: remoteSeg.sequence_number
-                    });
                     newMap.set(localId, {
                       ...localSeg,
                       speaker: remoteSpeaker
@@ -635,11 +604,9 @@ export const useAudioRecording = (
                     updatedCount++;
                   }
                 } else {
-                  // Track unmatched segments for debugging
                   unmatchedSegments.push({
                     remoteId,
-                    sequence: remoteSeg.sequence_number,
-                    speaker: remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker
+                    sequence: remoteSeg.sequence_number
                   });
                 }
               });
@@ -651,23 +618,16 @@ export const useAudioRecording = (
                 transcriptSegments: newMap
               };
             });
-          });
 
-          // Log summary of polling result
-          console.info(`[useAudioRecording][poll] Summary: Polled ${polledCount} segments, matched ${matchedCount}, updated ${updatedCount}`);
-          
-          // Log details about unmatched segments if any
-          if (unmatchedSegments.length > 0) {
-            console.debug("[useAudioRecording][poll] Unmatched segments:", {
-              count: unmatchedSegments.length,
-              samples: unmatchedSegments.slice(0, 3),
-              reason: "These remote segments could not be matched to local segments by ID or sequence number"
-            });
-          }
-        } else if (!res.ok) {
-          console.warn("[useAudioRecording][poll] Failed to fetch segments:", {
-            status: res.status,
-            error: res.error?.message
+            // Log INSIDE the updater to get accurate stats
+            if (polledCount > 0) {
+               console.info(`[useAudioRecording][poll] Stats: Polled ${polledCount}, Matched ${matchedCount}, Updated ${updatedCount}`);
+            }
+            if (unmatchedSegments.length > 0) {
+              console.warn(`[useAudioRecording][poll] Unmatched segments:`, unmatchedSegments.slice(0, 3));
+            }
+
+            return result;
           });
         }
       } catch (err) {
