@@ -71,7 +71,7 @@ const HydrationErrorOverlay = ({ error, onRetry }) => (
 );
 
 export default function MedicalScribeApp() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, accessToken } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
   const {
@@ -108,14 +108,15 @@ export default function MedicalScribeApp() {
     handleResume,
     handleGenerateNote,
     debugTranscriptSegments,
-    syncAllTranscriptSegments, // Using the new function
+    syncAllTranscriptSegments,
   } = useAudioRecording(
     activeConsultation,
     activeConsultationId,
     updateConsultation,
     resetConsultation,
     setConsultations,
-    finalizeConsultationTimestamp
+    finalizeConsultationTimestamp,
+    accessToken
   );
 
   // Handle sign out with a final background flush (no UI needed)
