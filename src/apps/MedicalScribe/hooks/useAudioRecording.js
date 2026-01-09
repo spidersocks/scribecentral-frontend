@@ -125,6 +125,8 @@ export const useAudioRecording = (
       translatedText: null,
       displayText: text
     };
+    // Ensure local final segments have a sequence too (though usually this path is fallback)
+    finalSegment._sequence = baseIndex;
 
     const newSegments = new Map(activeConsultation.transcriptSegments);
     newSegments.set(id, finalSegment);
@@ -342,11 +344,15 @@ export const useAudioRecording = (
                 endTimeMs,
               });
 
+              // Tag with sequence for fallback matching
+              const sequenceNumber = baseIndex + idx;
+              uiSegment._sequence = sequenceNumber;
+
               newSegments.set(uiSegment.id, uiSegment);
 
               segmentsToPersist.push({
                 ui: uiSegment,
-                sequenceNumber: baseIndex + idx,
+                sequenceNumber: sequenceNumber,
                 detectedLanguage: result.LanguageCode || activeConsultation.language || "en-US"
               });
 
@@ -548,6 +554,17 @@ export const useAudioRecording = (
               // Clone map to allow mutation
               const newMap = new Map(localMap);
 
+              // Build a sequence lookup for fallback matching
+              // This is critical because live segments (WebSocket) usually have a different ID 
+              // than backend segments until the swap happens. 
+              // _sequence is the robust invariant.
+              const seqToId = new Map();
+              for (const [id, seg] of newMap.entries()) {
+                if (typeof seg._sequence === 'number') {
+                  seqToId.set(seg._sequence, id);
+                }
+              }
+
               res.data.forEach(remoteSeg => {
                 // Backend might return snake_case or different ID fields
                 const rawId = remoteSeg.segment_id ?? remoteSeg.id;
@@ -558,16 +575,25 @@ export const useAudioRecording = (
                 // Convert to string to match local segment ID format (same as mapSegmentsToUiMap)
                 const remoteId = String(rawId);
                 
-                // Only update if we already have this segment (don't add new ones via poll to avoid conflict with WS)
-                if (newMap.has(remoteId)) {
-                  const localSeg = newMap.get(remoteId);
+                // 1. Try matching by ID (Backend ID)
+                // This works if the "ID swap" in persistFinalSegment has already happened.
+                let localId = newMap.has(remoteId) ? remoteId : null;
+
+                // 2. Fallback: Try matching by sequence number
+                // This handles cases where ID swap hasn't happened yet or we have a WebSocket ID.
+                if (!localId && typeof remoteSeg.sequence_number === 'number') {
+                  localId = seqToId.get(remoteSeg.sequence_number);
+                }
+
+                if (localId) {
+                  const localSeg = newMap.get(localId);
                   
                   // Prefer speaker_role (e.g. "Doctor"), fall back to speaker_label, then speaker
                   const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
                   
                   // If remote has a label and it's different from local, update it
                   if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
-                    newMap.set(remoteId, {
+                    newMap.set(localId, {
                       ...localSeg,
                       speaker: remoteSpeaker
                     });
