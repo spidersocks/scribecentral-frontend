@@ -70,7 +70,6 @@ async function apiRequest(
 }
 
 // Module-scoped caches
-// Previously _noteTypesPromise single promise; switched to per-user cache to support templates per-user
 const _noteTypesCache = new Map(); // key -> Promise resolving to note types array
 
 // Tiny 2s memo to coalesce repeat segment loads
@@ -149,11 +148,13 @@ export const apiClient = {
       accessToken: token,
     }),
 
-  listTranscriptSegments: ({ token, consultationId, signal, includeEntities } = {}) => {
+  listTranscriptSegments: ({ token, consultationId, signal, includeEntities, bypassCache } = {}) => {
     const key = `${consultationId}|${includeEntities ? "1" : "0"}`;
     const now = Date.now();
     const cached = _segmentsMemo.get(key);
-    if (cached && now - cached.ts < SEGMENTS_TTL_MS) {
+    
+    // Check cache only if bypassCache is false
+    if (!bypassCache && cached && now - cached.ts < SEGMENTS_TTL_MS) {
       return Promise.resolve(cached.res);
     }
 

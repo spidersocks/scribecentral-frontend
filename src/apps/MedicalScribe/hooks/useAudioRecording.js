@@ -163,7 +163,7 @@ export const useAudioRecording = (
   // --- SYNC / POLLING HELPER ---
   // Reusable function to fetch backend segments, merge speaker labels/translations,
   // and add any "tail" segments that might have been saved asynchronously by backend.
-  const syncRemoteSegments = useCallback(async () => {
+  const syncRemoteSegments = useCallback(async (bypassCache = false) => {
     if (!activeConsultationId) return;
 
     try {
@@ -171,7 +171,8 @@ export const useAudioRecording = (
       const res = await apiClient.listTranscriptSegments({
         token: accessToken,
         consultationId: activeConsultationId,
-        includeEntities: false 
+        includeEntities: false,
+        bypassCache // Allow bypassing cache for immediate updates after stop
       });
 
       if (res.ok && Array.isArray(res.data)) {
@@ -219,23 +220,24 @@ export const useAudioRecording = (
                 const localSeg = newMap.get(localId);
                 let segChanged = false;
 
-                // Prefer speaker_role, fall back to speaker_label, then speaker
+                // 1. Speaker (Authoritative update if present)
                 const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
                 if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
                   localSeg.speaker = remoteSpeaker;
                   segChanged = true;
                 }
 
-                // Check for translation updates
+                // 2. Translation (Authoritative update if present or changed)
                 const remoteTranslation = remoteSeg.translated_text ?? null;
-                if (remoteTranslation && remoteTranslation !== localSeg.translatedText) {
+                if (remoteTranslation !== localSeg.translatedText) {
                   localSeg.translatedText = remoteTranslation;
                   segChanged = true;
                 }
                 
-                // If text changed meaningfully (e.g. backend fixed the tail), update it
+                // 3. Text (Authoritative update - trust backend completely)
+                // Previously only updated if length increased. Now we trust backend if it exists.
                 const remoteText = remoteSeg.original_text ?? remoteSeg.text ?? "";
-                if (remoteText && remoteText.length > (localSeg.text || "").length) {
+                if (remoteText && remoteText !== localSeg.text) {
                    localSeg.text = remoteText;
                    localSeg.displayText = remoteText;
                    segChanged = true;
@@ -413,17 +415,17 @@ export const useAudioRecording = (
     }
 
     // Force an immediate sync to catch any segments the backend saved but we missed (tail sync)
-    // AND check for async Diarization/Translation updates.
-    await syncRemoteSegments();
+    // AND check for async Diarization/Translation updates. BYPASS CACHE to get fresh data.
+    await syncRemoteSegments(true);
     
     // Schedule follow-up syncs to catch asynchronous backend processing (diarization is slow)
     setTimeout(() => {
         console.debug("[useAudioRecording] Triggering post-stop sync (2s)");
-        syncRemoteSegments();
+        syncRemoteSegments(true); // Bypass cache
     }, 2000);
     setTimeout(() => {
         console.debug("[useAudioRecording] Triggering post-stop sync (5s)");
-        syncRemoteSegments();
+        syncRemoteSegments(true); // Bypass cache
     }, 5000);
 
     try {
