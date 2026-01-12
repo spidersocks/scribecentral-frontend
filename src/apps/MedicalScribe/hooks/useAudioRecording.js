@@ -21,7 +21,7 @@ export const useAudioRecording = (
   const audioWorkletNodeRef = useRef(null);
   const sessionStateRef = useRef('idle');
   const ownerUserIdRef = useRef(null);
-  const segmentCountRef = useRef(0); // NEW: Track local sequence number
+  const segmentCountRef = useRef(0); // Track local sequence number
 
   const persistedCountRef = useRef(0);
 
@@ -36,8 +36,6 @@ export const useAudioRecording = (
   // FIXED: Now swaps the temporary WebSocket ID with the permanent Backend ID on success.
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
     try {
-      // console.debug("[useAudioRecording] Persisting segment:", { sequenceNumber, id: segment.id, text: segment.text });
-      
       const payload = {
         sequence_number: sequenceNumber,
         speaker_label: segment.speaker ?? null,
@@ -50,7 +48,7 @@ export const useAudioRecording = (
 
       // IMMEDIATE POST to backend
       const res = await apiClient.createTranscriptSegment({
-        token: accessToken, // Use the token!
+        token: accessToken,
         consultationId: activeConsultationId,
         payload
       });
@@ -73,7 +71,6 @@ export const useAudioRecording = (
       const backendId = res.data?.id ?? res.data?.segment_id;
       
       if (backendId && String(backendId) !== String(segment.id)) {
-        // console.debug(`[useAudioRecording] Swapping ID: ${segment.id} -> ${backendId}`);
         setConsultations((prev) => prev.map((c) => {
           if (c.id !== activeConsultationId) return c;
           const oldMap = c.transcriptSegments;
@@ -147,7 +144,6 @@ export const useAudioRecording = (
     await persistFinalSegment(finalSegment, sequenceNumber, activeConsultation.language || "en-US");
   }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
-  // MOVE UP: persistAllSegments must be initialized before stopSession uses it
   const persistAllSegments = useCallback(async () => {
     if (!activeConsultation) return { attempted: 0, succeeded: 0 };
     const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
@@ -164,7 +160,227 @@ export const useAudioRecording = (
     return { attempted: ordered.length, succeeded: success };
   }, [activeConsultation, activeConsultationId, persistFinalSegment]);
 
-  // MOVE UP: stopSession must be available for startMicrophone catch
+  // --- SYNC / POLLING HELPER ---
+  // Reusable function to fetch backend segments, merge speaker labels/translations,
+  // and add any "tail" segments that might have been saved asynchronously by backend.
+  const syncRemoteSegments = useCallback(async () => {
+    if (!activeConsultationId) return;
+
+    try {
+      // Fetch latest segments to get updated speaker labels and translations
+      const res = await apiClient.listTranscriptSegments({
+        token: accessToken,
+        consultationId: activeConsultationId,
+        includeEntities: false 
+      });
+
+      if (res.ok && Array.isArray(res.data)) {
+        // Log one sample occasionally for debug
+        if (res.data.length > 0 && Math.random() < 0.05) { 
+           console.debug("[useAudioRecording] Sync poll sample:", res.data[0]);
+        }
+
+        setConsultations(prevConsultations => {
+          return prevConsultations.map(c => {
+            if (c.id !== activeConsultationId) return c;
+
+            const localMap = c.transcriptSegments;
+            let hasChanges = false;
+            let updateCount = 0;
+            let addCount = 0;
+            
+            // Clone map to allow mutation
+            const newMap = new Map(localMap);
+
+            // Build a sequence lookup for fallback matching
+            const seqToId = new Map();
+            for (const [id, seg] of newMap.entries()) {
+              if (typeof seg._sequence === 'number') {
+                seqToId.set(seg._sequence, id);
+              }
+            }
+
+            res.data.forEach(remoteSeg => {
+              const rawId = remoteSeg.segment_id ?? remoteSeg.id;
+              if (!rawId) return;
+              
+              const remoteId = String(rawId);
+              
+              // 1. Try matching by ID (Backend ID)
+              let localId = newMap.has(remoteId) ? remoteId : null;
+
+              // 2. Fallback: Try matching by sequence number
+              if (!localId && typeof remoteSeg.sequence_number === 'number') {
+                localId = seqToId.get(remoteSeg.sequence_number);
+              }
+
+              if (localId) {
+                // UPDATE EXISTING
+                const localSeg = newMap.get(localId);
+                let segChanged = false;
+
+                // Prefer speaker_role, fall back to speaker_label, then speaker
+                const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
+                if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
+                  localSeg.speaker = remoteSpeaker;
+                  segChanged = true;
+                }
+
+                // Check for translation updates
+                const remoteTranslation = remoteSeg.translated_text ?? null;
+                if (remoteTranslation && remoteTranslation !== localSeg.translatedText) {
+                  localSeg.translatedText = remoteTranslation;
+                  segChanged = true;
+                }
+                
+                // If text changed meaningfully (e.g. backend fixed the tail), update it
+                const remoteText = remoteSeg.original_text ?? remoteSeg.text ?? "";
+                if (remoteText && remoteText.length > (localSeg.text || "").length) {
+                   localSeg.text = remoteText;
+                   localSeg.displayText = remoteText;
+                   segChanged = true;
+                }
+
+                if (segChanged) {
+                  newMap.set(localId, { ...localSeg });
+                  hasChanges = true;
+                  updateCount++;
+                }
+              } else {
+                // ADD NEW (Missing tail segment)
+                // If we have a remote segment that matches neither ID nor Sequence locally, it's likely a tail segment
+                // that the backend saved but we missed via WebSocket.
+                const newUiSeg = {
+                  id: remoteId,
+                  speaker: remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null,
+                  text: remoteSeg.original_text ?? remoteSeg.text ?? "",
+                  displayText: remoteSeg.original_text ?? remoteSeg.text ?? "",
+                  translatedText: remoteSeg.translated_text ?? null,
+                  entities: [], // We requested includeEntities: false
+                  _sequence: remoteSeg.sequence_number ?? 9999
+                };
+                newMap.set(remoteId, newUiSeg);
+                hasChanges = true;
+                addCount++;
+              }
+            });
+
+            if (updateCount > 0 || addCount > 0) {
+               console.info(`[Diarization] Sync: Updated ${updateCount}, Added ${addCount} segments.`);
+            }
+
+            if (!hasChanges) return c;
+            
+            return {
+              ...c,
+              transcriptSegments: newMap
+            };
+          });
+        });
+      }
+    } catch (err) {
+      console.debug("[useAudioRecording] Sync segments error", err);
+    }
+  }, [activeConsultationId, accessToken, setConsultations]);
+
+  const handleGenerateNote = useCallback(async (noteTypeOverride) => {
+    if (!activeConsultation) return;
+    const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
+    
+    let templateId = null;
+    let noteTypeToUse = rawSelectedType;
+
+    if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
+      const parts = rawSelectedType.split(":", 2);
+      templateId = parts[1] ?? null;
+      noteTypeToUse = "standard";
+    }
+
+    let transcript = '';
+    Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
+      transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
+    });
+
+    if (!transcript.trim()) {
+      console.warn("[useAudioRecording] Generate note requested but transcript is empty.");
+      return;
+    }
+
+    const hadExistingNotes = Boolean(activeConsultation.notes);
+    updateConsultation(activeConsultationId, { loading: true, error: null });
+
+    try {
+      const encounterTime =
+        activeConsultation.createdAt ||
+        activeConsultation.notesCreatedAt ||
+        new Date().toISOString();
+
+      const profile = activeConsultation.patientProfile || {};
+      const patientInfo = {};
+
+      if (profile.name) patientInfo.name = profile.name;
+      if (profile.sex) patientInfo.sex = profile.sex;
+      if (profile.dateOfBirth) {
+        try {
+          const ageVal = calculateAge(profile.dateOfBirth);
+          if (ageVal !== null && ageVal !== undefined) {
+            patientInfo.age = String(ageVal);
+          }
+        } catch {}
+      }
+      if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
+      if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
+
+      const requestBody = {
+        consultation_id: activeConsultationId, // Required for backend flush
+        full_transcript: transcript,
+        note_type: noteTypeToUse,
+        encounter_time: encounterTime,
+      };
+      if (templateId) requestBody.template_id = templateId;
+      if (Object.keys(patientInfo).length > 0) {
+        requestBody.patient_info = patientInfo;
+      }
+      
+      const headers = { 'Content-Type': 'application/json' };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+      const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(requestBody)
+      });
+      
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data?.detail || `${resp.status} ${resp.statusText}`;
+        throw new Error(detail);
+      }
+
+      updateConsultation(activeConsultationId, {
+        notes: data.notes,
+        noteType: rawSelectedType,
+        noteId: activeConsultationId,
+        notesCreatedAt: new Date().toISOString(),
+        notesUpdatedAt: new Date().toISOString(),
+        loading: false
+      });
+
+      if (finalizeConsultationTimestamp) {
+        finalizeConsultationTimestamp(activeConsultationId);
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Failed to generate final note:", err);
+      updateConsultation(activeConsultationId, {
+        loading: false
+      });
+
+      if (!hadExistingNotes) {
+        console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
+      }
+    }
+  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp, accessToken]);
+
   const stopSession = useCallback(async (closeSocket = true) => {
     if (!activeConsultation) return;
     if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
@@ -196,6 +412,20 @@ export const useAudioRecording = (
       await finalizeInterimSegment();
     }
 
+    // Force an immediate sync to catch any segments the backend saved but we missed (tail sync)
+    // AND check for async Diarization/Translation updates.
+    await syncRemoteSegments();
+    
+    // Schedule follow-up syncs to catch asynchronous backend processing (diarization is slow)
+    setTimeout(() => {
+        console.debug("[useAudioRecording] Triggering post-stop sync (2s)");
+        syncRemoteSegments();
+    }, 2000);
+    setTimeout(() => {
+        console.debug("[useAudioRecording] Triggering post-stop sync (5s)");
+        syncRemoteSegments();
+    }, 5000);
+
     try {
       if (activeConsultation.transcriptSegments.size > 0) {
         await handleGenerateNote();
@@ -204,7 +434,7 @@ export const useAudioRecording = (
       console.error("[useAudioRecording] Note generation failed (patch order):", err);
     }
     
-    // Check if we need to backfill segments (unlikely with immediate persistence, but safe to keep)
+    // Cache warm-up (enrichment)
     try {
       apiClient.enrichTranscriptSegments({ 
         token: accessToken, 
@@ -214,9 +444,16 @@ export const useAudioRecording = (
          console.warn("[useAudioRecording] Enrichment cache request failed", e);
       });
     } catch (e) {}
-  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments, accessToken]);
+  }, [
+    activeConsultation, 
+    activeConsultationId, 
+    updateConsultation, 
+    finalizeInterimSegment, 
+    syncRemoteSegments, // Added dependency
+    handleGenerateNote, 
+    accessToken
+  ]);
 
-  // Now safe: references stopSession in catch
   const startMicrophone = useCallback(async () => {
     if (!activeConsultation) return;
     try {
@@ -375,7 +612,6 @@ export const useAudioRecording = (
           // 3. IMMEDIATE PERSISTENCE (Optimistic)
           // Fire API calls immediately. We don't await them blocking the loop; we fire parallel requests.
           segmentsToPersist.forEach(({ ui, sequenceNumber, detectedLanguage }) => {
-             // console.debug(`[useAudioRecording] Immediate persist trigger for seq ${sequenceNumber}`);
              persistFinalSegment(ui, sequenceNumber, detectedLanguage).catch(err => {
                 console.error(`[useAudioRecording] Immediate persist failed for seq ${sequenceNumber}`, err);
              });
@@ -417,7 +653,7 @@ export const useAudioRecording = (
     prepareSegmentForUi,
     persistFinalSegment,
     stopSession,
-    accessToken // Dependency updated
+    accessToken
   ]);
 
   const handlePause = useCallback(async () => {
@@ -428,108 +664,6 @@ export const useAudioRecording = (
   const handleResume = useCallback(() => {
     updateConsultation(activeConsultationId, { sessionState: 'recording' });
   }, [activeConsultationId, updateConsultation]);
-
-  const handleGenerateNote = useCallback(async (noteTypeOverride) => {
-    // ... existing generation logic ...
-    // Pass accessToken implicitly if apiClient supports it, or check if we need to pass it explicitly?
-    // apiClient.js's handleGenerateNote implementation in useAudioRecording currently uses fetch() directly.
-    // We should probably update it to use apiClient or at least pass headers.
-
-    if (!activeConsultation) return;
-    const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
-
-    let templateId = null;
-    let noteTypeToUse = rawSelectedType;
-
-    if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
-      const parts = rawSelectedType.split(":", 2);
-      templateId = parts[1] ?? null;
-      noteTypeToUse = "standard";
-    }
-
-    // ... setup ...
-    let transcript = '';
-    Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
-      transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
-    });
-
-    if (!transcript.trim()) {
-      console.warn("[useAudioRecording] Generate note requested but transcript is empty.");
-      return;
-    }
-
-    const hadExistingNotes = Boolean(activeConsultation.notes);
-    updateConsultation(activeConsultationId, { loading: true, error: null });
-
-    try {
-      // ... payload setup ...
-      const encounterTime = activeConsultation.createdAt || new Date().toISOString();
-      
-      const profile = activeConsultation.patientProfile || {};
-      const patientInfo = {};
-
-      if (profile.name) patientInfo.name = profile.name;
-      if (profile.sex) patientInfo.sex = profile.sex;
-      if (profile.dateOfBirth) {
-        try {
-          const ageVal = calculateAge(profile.dateOfBirth);
-          if (ageVal !== null && ageVal !== undefined) {
-            patientInfo.age = String(ageVal);
-          }
-        } catch {}
-      }
-      if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
-      if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
-
-      const requestBody = {
-        consultation_id: activeConsultationId,
-        full_transcript: transcript,
-        note_type: noteTypeToUse,
-        encounter_time: encounterTime,
-      };
-      if (templateId) requestBody.template_id = templateId;
-      if (Object.keys(patientInfo).length > 0) {
-        requestBody.patient_info = patientInfo;
-      }
-      
-      // Update: Use apiClient if available or fetch with auth header
-      // For now, patching fetch to include auth
-      const headers = { 'Content-Type': 'application/json' };
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
-      const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
-      });
-      
-      // ... rest of response handling ...
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data.detail || `${resp.status} ${resp.statusText}`);
-      }
-
-      updateConsultation(activeConsultationId, {
-        notes: data.notes,
-        noteType: rawSelectedType,
-        noteId: activeConsultationId,
-        notesCreatedAt: new Date().toISOString(),
-        notesUpdatedAt: new Date().toISOString(),
-        loading: false
-      });
-      
-      if (finalizeConsultationTimestamp) {
-        finalizeConsultationTimestamp(activeConsultationId);
-      }
-    } catch (err) {
-      console.error("[useAudioRecording] Failed to generate final note:", err);
-      updateConsultation(activeConsultationId, { loading: false });
-
-      if (!hadExistingNotes) {
-        console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
-      }
-    }
-  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp, accessToken]);
 
   const debugTranscriptSegments = useCallback(() => {}, []);
 
@@ -549,95 +683,10 @@ export const useAudioRecording = (
     // Poll frequently (5s) to get near-realtime updates
     const POLL_INTERVAL = 5000; 
 
-    const poll = async () => {
-      try {
-        // Fetch latest segments to get updated speaker labels
-        // NOW USING ACCESS TOKEN
-        const res = await apiClient.listTranscriptSegments({
-          token: accessToken,
-          consultationId: activeConsultationId,
-          includeEntities: false 
-        });
-
-        if (res.ok && Array.isArray(res.data)) {
-          // DEBUG: Log one sample to verify field names (e.g. speaker vs speaker_role)
-          if (res.data.length > 0 && Math.random() < 0.05) { 
-             console.debug("[useAudioRecording] Diarization poll sample:", res.data[0]);
-          }
-
-          setConsultations(prevConsultations => {
-            return prevConsultations.map(c => {
-              if (c.id !== activeConsultationId) return c;
-
-              const localMap = c.transcriptSegments;
-              let hasChanges = false;
-              let updateCount = 0;
-              
-              // Clone map to allow mutation
-              const newMap = new Map(localMap);
-
-              // Build a sequence lookup for fallback matching
-              const seqToId = new Map();
-              for (const [id, seg] of newMap.entries()) {
-                if (typeof seg._sequence === 'number') {
-                  seqToId.set(seg._sequence, id);
-                }
-              }
-
-              res.data.forEach(remoteSeg => {
-                const rawId = remoteSeg.segment_id ?? remoteSeg.id;
-                if (!rawId) return;
-                
-                const remoteId = String(rawId);
-                
-                // 1. Try matching by ID (Backend ID)
-                let localId = newMap.has(remoteId) ? remoteId : null;
-
-                // 2. Fallback: Try matching by sequence number
-                if (!localId && typeof remoteSeg.sequence_number === 'number') {
-                  localId = seqToId.get(remoteSeg.sequence_number);
-                }
-
-                if (localId) {
-                  const localSeg = newMap.get(localId);
-                  
-                  // Prefer speaker_role, fall back to speaker_label, then speaker
-                  const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
-                  
-                  // If remote has a label and it's different from local, update it
-                  if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
-                    // console.debug(`[Diarization] Updating ${localId} (seq ${remoteSeg.sequence_number}): ${localSeg.speaker} -> ${remoteSpeaker}`);
-                    newMap.set(localId, {
-                      ...localSeg,
-                      speaker: remoteSpeaker
-                    });
-                    hasChanges = true;
-                    updateCount++;
-                  }
-                }
-              });
-
-              if (updateCount > 0) {
-                 console.info(`[Diarization] Updated ${updateCount} speaker labels.`);
-              }
-
-              if (!hasChanges) return c;
-              
-              return {
-                ...c,
-                transcriptSegments: newMap
-              };
-            });
-          });
-        }
-      } catch (err) {
-        console.debug("[useAudioRecording] Speaker poll error", err);
-      }
-    };
-
-    const intervalId = setInterval(poll, POLL_INTERVAL);
+    // Use the refactored sync function
+    const intervalId = setInterval(syncRemoteSegments, POLL_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [activeConsultationId, activeConsultation?.sessionState, setConsultations, accessToken]);
+  }, [activeConsultationId, activeConsultation?.sessionState, syncRemoteSegments]);
 
   return {
     startSession,
