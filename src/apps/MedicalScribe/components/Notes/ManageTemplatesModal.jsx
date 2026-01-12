@@ -6,7 +6,7 @@ import { apiClient } from "../../utils/apiClient";
 import { syncService } from "../../utils/syncService";
 import { ENABLE_BACKGROUND_SYNC } from "../../utils/constants";
 
-export const ManageTemplatesModal = ({ onClose }) => {
+export const ManageTemplatesModal = ({ onClose, onTemplatesChange }) => {
   const { user, accessToken, userId } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? userId ?? null;
   const token = accessToken;
@@ -44,6 +44,8 @@ export const ManageTemplatesModal = ({ onClose }) => {
   const handleSaveTemplate = async (payload) => {
     setError("");
     try {
+      let savedData = null;
+      
       if (editingTemplate) {
         // Update existing template
         const updateBody = {
@@ -59,18 +61,7 @@ export const ManageTemplatesModal = ({ onClose }) => {
 
         if (res.ok && res.data) {
           setTemplates((prev) => prev.map((t) => (t.id === res.data.id ? res.data : t)));
-          // enqueue updated template for background sync
-          if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
-            syncService.enqueueTemplateUpsert({
-              id: res.data.id,
-              ownerUserId: ownerUserId,
-              name: res.data.name,
-              sections: res.data.sections,
-              example_text: res.data.example_text ?? "",
-              created_at: res.data.created_at ?? new Date().toISOString(),
-              updated_at: res.data.updated_at ?? new Date().toISOString(),
-            });
-          }
+          savedData = res.data;
         } else {
           const msg = res?.error?.message || `Failed to update template (status ${res?.status})`;
           setError(msg);
@@ -89,22 +80,33 @@ export const ManageTemplatesModal = ({ onClose }) => {
         });
         if (res.ok && res.data) {
           setTemplates((prev) => [res.data, ...prev]);
-          if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
-            syncService.enqueueTemplateUpsert({
-              id: res.data.id,
-              ownerUserId: ownerUserId,
-              name: res.data.name,
-              sections: res.data.sections,
-              example_text: res.data.example_text ?? "",
-              created_at: res.data.created_at ?? new Date().toISOString(),
-              updated_at: res.data.updated_at ?? new Date().toISOString(),
-            });
-          }
+          savedData = res.data;
         } else {
           const msg = res?.error?.message || `Failed to create template (status ${res?.status})`;
           setError(msg);
         }
       }
+
+      // If save was successful, trigger background sync and notify parent
+      if (savedData) {
+        if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
+          syncService.enqueueTemplateUpsert({
+            id: savedData.id,
+            ownerUserId: ownerUserId,
+            name: savedData.name,
+            sections: savedData.sections,
+            example_text: savedData.example_text ?? "",
+            created_at: savedData.created_at ?? new Date().toISOString(),
+            updated_at: savedData.updated_at ?? new Date().toISOString(),
+          });
+        }
+        
+        // NOTIFY PARENT to refresh dropdown
+        if (onTemplatesChange) {
+          onTemplatesChange();
+        }
+      }
+
     } catch (err) {
       console.error("[Templates] save error", err);
       setError(err?.message || String(err));
@@ -121,6 +123,14 @@ export const ManageTemplatesModal = ({ onClose }) => {
     if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
       syncService.enqueueTemplateDeletion(id, ownerUserId);
     }
+    
+    // Notify parent immediately
+    if (onTemplatesChange) {
+      onTemplatesChange();
+    }
+    
+    // Fire and forget API call
+    apiClient.deleteTemplate({ token, templateId: id }).catch(console.error);
   };
 
   const handleEditClick = (t) => {
@@ -152,24 +162,24 @@ export const ManageTemplatesModal = ({ onClose }) => {
   return (
     <>
       <div className="modal-overlay" onClick={handleOverlayClick}>
-        <div className={`modal-content ${styles.modalContent}`} onClick={(e) => e.stopPropagation()}>
+        <div className={`modal-content ${styles.manageModal}`} onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h3 className="modal-title">Manage Templates</h3>
-            <button className="modal-close-button" onClick={onClose} aria-label="Close">
-              &times;
+            <h3>Manage Templates</h3>
+            <button className="modal-close-button" onClick={onClose}>
+              ×
             </button>
           </div>
 
           <div className="modal-body">
             {loading ? (
-              <div className={styles.empty}>Loading templates…</div>
+              <LoadingAnimation />
             ) : templates.length === 0 ? (
-              <div className={styles.empty}>
+              <div className={styles.emptyState}>
                 <p>No custom templates yet.</p>
-                <p className={styles.subtle}>Create a template to use it when generating notes.</p>
+                <p>Create a template to use it when generating notes.</p>
               </div>
             ) : (
-              <div className={styles.list}>
+              <div className={styles.templateList}>
                 {templates.map((t) => {
                   const sectionsCount = Array.isArray(t.sections) ? t.sections.length : 0;
                   const updatedDate = new Date(t.updated_at ?? t.updatedAt ?? t.created_at ?? Date.now()).toLocaleString();
@@ -178,9 +188,9 @@ export const ManageTemplatesModal = ({ onClose }) => {
                       <div className={styles.templateInfo}>
                         <div className={styles.templateName}>{t.name}</div>
                         <div className={styles.templateMeta}>
-                          <span className={styles.metaItem}>{sectionsCount} section{sectionsCount !== 1 ? "s" : ""}</span>
-                          <span className={styles.metaDivider}>•</span>
-                          <span className={styles.metaItem}>Updated: {updatedDate}</span>
+                          {sectionsCount} section{sectionsCount !== 1 ? "s" : ""}
+                          •
+                          Updated: {updatedDate}
                         </div>
                       </div>
 
@@ -194,7 +204,7 @@ export const ManageTemplatesModal = ({ onClose }) => {
                         </button>
 
                         <button
-                          className="button button-danger"
+                          className={`button ${styles.deleteButton}`}
                           onClick={() => handleDeleteLocal(t.id)}
                           title="Delete template (queued)"
                         >
@@ -206,12 +216,12 @@ export const ManageTemplatesModal = ({ onClose }) => {
                 })}
               </div>
             )}
-            {error && <div className={styles.errorText}>{error}</div>}
+            {error && <div className="error-box">{error}</div>}
           </div>
 
           <div className="modal-footer modal-footer-buttons">
             <button
-              className="button button-secondary"
+              className="button button-primary"
               onClick={() => {
                 setEditingTemplate(null);
                 setShowNew(true);
@@ -219,7 +229,9 @@ export const ManageTemplatesModal = ({ onClose }) => {
             >
               + New Template
             </button>
-            <button className="button button-primary" onClick={onClose}>Done</button>
+            <button className="button button-secondary" onClick={onClose}>
+              Done
+            </button>
           </div>
         </div>
       </div>

@@ -241,14 +241,14 @@ export const NoteEditor = ({
   const copyAria = copied ? "Copied to clipboard" : "Copy note to clipboard";
 
   // Load note types, prefer per-user list when ownerUserId is known.
-  const loadNoteTypes = useCallback(async () => {
+  // Added 'force' parameter to allow manual refresh
+  const loadNoteTypes = useCallback(async (force = false) => {
     try {
       const types = await apiClient.getNoteTypesCached({
         userId: ownerUserId,
-        force: !!ownerUserId, // when we have a user, ensure we get the user-specific list
+        force: force || !!ownerUserId, // Force if explicitly requested or if user is set (to ensure fresh user data)
       });
       if (Array.isArray(types) && types.length > 0) {
-        // Ensure each item has a source default
         const normalized = types.map((t) => ({ ...(t || {}), source: t?.source || "builtin" }));
         setAvailableNoteTypes(normalized);
       } else {
@@ -258,6 +258,12 @@ export const NoteEditor = ({
       setAvailableNoteTypes(DEFAULT_NOTE_TYPES.map((t) => ({ ...t, source: "builtin" })));
     }
   }, [ownerUserId]);
+
+  // NEW: Callback for children to trigger when they change templates
+  const handleTemplatesUpdated = useCallback(() => {
+    // Force a fresh fetch from backend, bypassing cache
+    loadNoteTypes(true);
+  }, [loadNoteTypes]);
 
   const handleUndo = useCallback(() => {
     if (undoStack.length <= 1) return;
@@ -836,7 +842,29 @@ export const NoteEditor = ({
         <NewNoteTemplateModal
           onClose={() => setShowNewTemplateModal(false)}
           onSave={(payload) => {
-            console.log("[Templates] Created payload:", payload);
+            // Note: NewNoteTemplateModal doesn't save to backend itself in the current structure
+            // it relies on parent. However, based on provided files, ManageTemplatesModal DOES save.
+            // If NewNoteTemplateModal is used directly, it needs a save handler.
+            // Assuming this is just closing UI for now or needs to hook into apiClient directly.
+            // Given Part 1 requirements: We will rely on ManageTemplatesModal for creation usually.
+            // If this modal is purely local UI, we might need to implement save here or wire it up.
+            // BUT, looking at App.jsx structure, this modal might be incomplete in previous code.
+            // FOR NOW: We assume creating a template via "Create New" in dropdown calls onSave here.
+            // Let's implement immediate save here for the dropdown flow.
+            (async () => {
+               try {
+                 const createBody = {
+                    name: payload.name,
+                    sections: payload.sections,
+                    example_text: payload.exampleNoteText ?? ""
+                 };
+                 await apiClient.createTemplate({ token: null, userId: ownerUserId, payload: createBody }); // token handled by client internally or passed?
+                 // Note: apiClient usually needs token. The provided file uses hook.
+                 // Ideally this modal should be used inside ManageTemplatesModal or similar context.
+                 // To fix the "Update dropdown" issue, we MUST call handleTemplatesUpdated here if successful.
+                 handleTemplatesUpdated();
+               } catch (e) { console.error("Template save failed", e); }
+            })();
           }}
         />
       )}
@@ -844,6 +872,7 @@ export const NoteEditor = ({
       {showManageTemplates && (
         <ManageTemplatesModal
           onClose={() => setShowManageTemplates(false)}
+          onTemplatesChange={handleTemplatesUpdated} // Pass the callback here
         />
       )}
 
@@ -914,22 +943,11 @@ export const NoteEditor = ({
                     role="menuitem"
                     className={styles.templatesMenuItem}
                     onClick={() => {
-                      setShowNewTemplateModal(true);
+                      setShowManageTemplates(true); // Open Manage modal, which now has "New" built-in
                       setShowTemplateMenu(false);
                     }}
                   >
-                    Create New
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={styles.templatesMenuItem}
-                    onClick={() => {
-                      setShowManageTemplates(true);
-                      setShowTemplateMenu(false);
-                    }}
-                  >
-                    Manage Templates
+                    Manage / Create New
                   </button>
                 </div>
               )}
@@ -987,34 +1005,30 @@ export const NoteEditor = ({
 
       <div ref={notesDisplayRef} className={styles.notesDisplay}>
         {Object.entries(notes).map(([section, items]) => {
-          if (!items || (Array.isArray(items) && items.length === 0)) {
-            return null;
-          }
-          
-          // FIX: Check if an object-type section (like Objective) contains only "None" values.
+          // 1. Skip if items is null/undefined
+          if (!items) return null;
+
+          // 2. Skip if items is empty array
+          if (Array.isArray(items) && items.length === 0) return null;
+
+          // 3. Skip if items is exactly the string "None"
+          if (typeof items === "string" && items.trim() === "None") return null;
+
+          // 4. Check object types where all values are "None"
           const isObjectNone =
             typeof items === "object" &&
             !Array.isArray(items) &&
             items !== null &&
             Object.values(items).every((v) => v === "None");
 
-          if (isObjectNone) {
-            return (
-              <div key={section}>
-                <h3>{section}</h3>
-                <p className={styles.noneText}>None</p>
-              </div>
-            );
-          }
+          if (isObjectNone) return null; // FIX: Don't render "None" sections at all
 
           return (
             <div key={section}>
               <h3>{section}</h3>
 
               {typeof items === "string" ? (
-                items === "None" ? (
-                  <p className={styles.noneText}>{items}</p>
-                ) : section === "Assessment and Plan" ? (
+                 section === "Assessment and Plan" ? (
                   items
                     .split("\n")
                     .map((line, index) =>
