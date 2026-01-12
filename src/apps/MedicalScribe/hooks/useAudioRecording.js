@@ -212,12 +212,28 @@ export const useAudioRecording = (
 
               // 2. Fallback: Try matching by sequence number
               if (!localId && typeof remoteSeg.sequence_number === 'number') {
-                localId = seqToId.get(remoteSeg.sequence_number);
+                const seqMatchId = seqToId.get(remoteSeg.sequence_number);
+                if (seqMatchId) {
+                    localId = seqMatchId;
+                    
+                    // Robustness: If we matched by sequence but IDs differ, it means local is temporary ID
+                    // We should swap it now to prevent future mismatch/confusion.
+                    if (localId !== remoteId) {
+                         const segToSwap = newMap.get(localId);
+                         newMap.delete(localId); // Remove old key
+                         const swappedSeg = { ...segToSwap, id: remoteId };
+                         newMap.set(remoteId, swappedSeg); // Add with new key
+                         localId = remoteId; // Update reference for subsequent logic
+                         hasChanges = true; // Mark as changed so UI gets fresh keys
+                    }
+                }
               }
 
               if (localId) {
                 // UPDATE EXISTING
-                const localSeg = newMap.get(localId);
+                // Clone the object properly before mutation to ensure React detects change
+                const oldSeg = newMap.get(localId);
+                const localSeg = { ...oldSeg };
                 let segChanged = false;
 
                 // 1. Speaker (Authoritative update if present)
@@ -235,7 +251,6 @@ export const useAudioRecording = (
                 }
                 
                 // 3. Text (Authoritative update - trust backend completely)
-                // Previously only updated if length increased. Now we trust backend if it exists.
                 const remoteText = remoteSeg.original_text ?? remoteSeg.text ?? "";
                 if (remoteText && remoteText !== localSeg.text) {
                    localSeg.text = remoteText;
@@ -244,7 +259,7 @@ export const useAudioRecording = (
                 }
 
                 if (segChanged) {
-                  newMap.set(localId, { ...localSeg });
+                  newMap.set(localId, localSeg);
                   hasChanges = true;
                   updateCount++;
                 }
@@ -268,7 +283,7 @@ export const useAudioRecording = (
             });
 
             if (updateCount > 0 || addCount > 0) {
-               console.info(`[Diarization] Sync: Updated ${updateCount}, Added ${addCount} segments.`);
+               console.debug(`[Diarization] Sync: Updated ${updateCount}, Added ${addCount} segments.`);
             }
 
             if (!hasChanges) return c;
@@ -418,15 +433,19 @@ export const useAudioRecording = (
     // AND check for async Diarization/Translation updates. BYPASS CACHE to get fresh data.
     await syncRemoteSegments(true);
     
-    // Schedule follow-up syncs to catch asynchronous backend processing (diarization is slow)
+    // Aggressive Tail Polling: catch asynchronous backend processing
     setTimeout(() => {
-        console.debug("[useAudioRecording] Triggering post-stop sync (2s)");
-        syncRemoteSegments(true); // Bypass cache
+        console.debug("[useAudioRecording] Post-stop sync (2s)");
+        syncRemoteSegments(true);
     }, 2000);
     setTimeout(() => {
-        console.debug("[useAudioRecording] Triggering post-stop sync (5s)");
-        syncRemoteSegments(true); // Bypass cache
+        console.debug("[useAudioRecording] Post-stop sync (5s)");
+        syncRemoteSegments(true);
     }, 5000);
+    setTimeout(() => {
+        console.debug("[useAudioRecording] Post-stop sync (10s)");
+        syncRemoteSegments(true);
+    }, 10000);
 
     try {
       if (activeConsultation.transcriptSegments.size > 0) {
@@ -451,7 +470,7 @@ export const useAudioRecording = (
     activeConsultationId, 
     updateConsultation, 
     finalizeInterimSegment, 
-    syncRemoteSegments, // Added dependency
+    syncRemoteSegments, 
     handleGenerateNote, 
     accessToken
   ]);
@@ -521,6 +540,9 @@ export const useAudioRecording = (
       if (activeConsultation.language) {
         url.searchParams.set('language_code', activeConsultation.language);
       }
+      
+      // FIXED: Pass consultation_id so backend handles orphans on disconnect
+      url.searchParams.set('consultation_id', activeConsultationId);
 
       const ws = new WebSocket(url.toString());
       websocketRef.current = ws;
