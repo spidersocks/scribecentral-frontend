@@ -5,6 +5,7 @@ import styles from "./ManageTemplatesModal.module.css";
 import { apiClient } from "../../utils/apiClient";
 import { syncService } from "../../utils/syncService";
 import { ENABLE_BACKGROUND_SYNC } from "../../utils/constants";
+import { LoadingAnimation } from "../shared/LoadingAnimation"; // FIX: Added missing import
 
 export const ManageTemplatesModal = ({ onClose, onTemplatesChange }) => {
   const { user, accessToken, userId } = useAuth();

@@ -5,8 +5,9 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { DEFAULT_NOTE_TYPES } from "../../utils/constants";
+import { DEFAULT_NOTE_TYPES, ENABLE_BACKGROUND_SYNC } from "../../utils/constants";
 import { apiClient } from "../../utils/apiClient";
+import { syncService } from "../../utils/syncService";
 import {
   formatNotesAsHTML,
   parseHTMLToNotes,
@@ -110,7 +111,7 @@ export const NoteEditor = ({
   onRegenerate,
   transcriptSegments,
 }) => {
-  const { user, userId } = useAuth();
+  const { user, userId, accessToken } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? userId ?? null;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -842,15 +843,7 @@ export const NoteEditor = ({
         <NewNoteTemplateModal
           onClose={() => setShowNewTemplateModal(false)}
           onSave={(payload) => {
-            // Note: NewNoteTemplateModal doesn't save to backend itself in the current structure
-            // it relies on parent. However, based on provided files, ManageTemplatesModal DOES save.
-            // If NewNoteTemplateModal is used directly, it needs a save handler.
-            // Assuming this is just closing UI for now or needs to hook into apiClient directly.
-            // Given Part 1 requirements: We will rely on ManageTemplatesModal for creation usually.
-            // If this modal is purely local UI, we might need to implement save here or wire it up.
-            // BUT, looking at App.jsx structure, this modal might be incomplete in previous code.
-            // FOR NOW: We assume creating a template via "Create New" in dropdown calls onSave here.
-            // Let's implement immediate save here for the dropdown flow.
+            // FIX: Implement correct saving logic here to create and sync immediately
             (async () => {
                try {
                  const createBody = {
@@ -858,12 +851,28 @@ export const NoteEditor = ({
                     sections: payload.sections,
                     example_text: payload.exampleNoteText ?? ""
                  };
-                 await apiClient.createTemplate({ token: null, userId: ownerUserId, payload: createBody }); // token handled by client internally or passed?
-                 // Note: apiClient usually needs token. The provided file uses hook.
-                 // Ideally this modal should be used inside ManageTemplatesModal or similar context.
-                 // To fix the "Update dropdown" issue, we MUST call handleTemplatesUpdated here if successful.
-                 handleTemplatesUpdated();
-               } catch (e) { console.error("Template save failed", e); }
+                 const res = await apiClient.createTemplate({ token: accessToken, userId: ownerUserId, payload: createBody });
+                 
+                 if (res.ok && res.data) {
+                   const savedData = res.data;
+                   if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
+                      syncService.enqueueTemplateUpsert({
+                        id: savedData.id,
+                        ownerUserId: ownerUserId,
+                        name: savedData.name,
+                        sections: savedData.sections,
+                        example_text: savedData.example_text ?? "",
+                        created_at: savedData.created_at ?? new Date().toISOString(),
+                        updated_at: savedData.updated_at ?? new Date().toISOString(),
+                      });
+                   }
+                   handleTemplatesUpdated();
+                 } else {
+                   console.error("Template save failed", res);
+                 }
+               } catch (e) { 
+                 console.error("Template save failed", e); 
+               }
             })();
           }}
         />
@@ -913,7 +922,7 @@ export const NoteEditor = ({
                 <optgroup label="Custom templates">
                   {templateTypes.map((type) => (
                     <option key={type.id} value={type.id}>
-                      {type.name} {/* option text can't be styled; label communicates customness via optgroup */}
+                      {type.name}
                     </option>
                   ))}
                 </optgroup>
@@ -943,11 +952,22 @@ export const NoteEditor = ({
                     role="menuitem"
                     className={styles.templatesMenuItem}
                     onClick={() => {
-                      setShowManageTemplates(true); // Open Manage modal, which now has "New" built-in
+                      setShowNewTemplateModal(true); // FIX: Separate Create button
                       setShowTemplateMenu(false);
                     }}
                   >
-                    Manage / Create New
+                    Create New
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.templatesMenuItem}
+                    onClick={() => {
+                      setShowManageTemplates(true); // FIX: Separate Manage button
+                      setShowTemplateMenu(false);
+                    }}
+                  >
+                    Manage
                   </button>
                 </div>
               )}
@@ -1011,8 +1031,7 @@ export const NoteEditor = ({
           // 2. Skip if items is empty array
           if (Array.isArray(items) && items.length === 0) return null;
 
-          // REMOVED: Logic that hides sections if value is "None"
-          // We now allow "None" to be displayed so users can edit it.
+          // Note: "None" checks removed to allow empty sections to display
 
           return (
             <div key={section}>
