@@ -13,27 +13,25 @@ export const useAudioRecording = (
   resetConsultation,
   setConsultations,
   finalizeConsultationTimestamp,
-  accessToken // NEW: Accept access token for authenticated API calls
+  accessToken
 ) => {
   const websocketRef = useRef(null);
-  const audioContextRef = useRef(null);
   const microphoneStreamRef = useRef(null);
+  const audioContextRef = useRef(null);
   const audioWorkletNodeRef = useRef(null);
   const sessionStateRef = useRef('idle');
-  const ownerUserIdRef = useRef(null);
-  const segmentCountRef = useRef(0); // Track local sequence number
+  const segmentCountRef = useRef(0);
+  
+  // Track if we are currently in the "tail polling" phase
+  const isTailPollingRef = useRef(false);
 
-  const persistedCountRef = useRef(0);
+  // Keep ref up to date
+  useEffect(() => {
+    if (activeConsultation) {
+      sessionStateRef.current = activeConsultation.sessionState;
+    }
+  }, [activeConsultation]);
 
-  if (activeConsultation?.ownerUserId) {
-    ownerUserIdRef.current = activeConsultation.ownerUserId;
-  }
-  if (activeConsultation) {
-    sessionStateRef.current = activeConsultation.sessionState;
-  }
-
-  // Persist a finalized segment to the backend (no entities)
-  // FIXED: Now swaps the temporary WebSocket ID with the permanent Backend ID on success.
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
     try {
       const payload = {
@@ -46,7 +44,6 @@ export const useAudioRecording = (
         end_time_ms: segment.endTimeMs ?? null,
       };
 
-      // IMMEDIATE POST to backend
       const res = await apiClient.createTranscriptSegment({
         token: accessToken,
         consultationId: activeConsultationId,
@@ -55,32 +52,23 @@ export const useAudioRecording = (
 
       if (!res.ok) {
         console.error("[useAudioRecording] Persist segment FAILED", {
-          consultationId: activeConsultationId,
           status: res.status,
-          errorMessage: res.error?.message,
-          responseData: res.data
+          error: res.error?.message
         });
         return false;
       }
 
-      // --- ID SWAP LOGIC START ---
-      // The segment currently exists in our local Map under `segment.id` (WS ResultId).
-      // The backend has just returned the authoritative ID (UUID).
-      // We must update the local Map to use the authoritative ID so that polling updates (Diarization)
-      // can correctly find and update this segment later.
+      // ID Swap: If backend returned a real UUID, update our local map to use it
       const backendId = res.data?.id ?? res.data?.segment_id;
-      
       if (backendId && String(backendId) !== String(segment.id)) {
         setConsultations((prev) => prev.map((c) => {
           if (c.id !== activeConsultationId) return c;
           const oldMap = c.transcriptSegments;
           if (!oldMap.has(segment.id)) return c;
 
-          // Rebuild the map to preserve insertion order (critical for transcript display flow)
           const newMap = new Map();
           for (const [key, val] of oldMap) {
             if (key === segment.id) {
-              // Replace key with backendId, and update the object's ID field
               const updatedVal = { ...val, id: String(backendId) };
               newMap.set(String(backendId), updatedVal);
             } else {
@@ -90,9 +78,6 @@ export const useAudioRecording = (
           return { ...c, transcriptSegments: newMap };
         }));
       }
-      // --- ID SWAP LOGIC END ---
-
-      persistedCountRef.current += 1;
       return true;
     } catch (e) {
       console.error("[useAudioRecording] Failed to persist transcript segment:", e);
@@ -118,7 +103,6 @@ export const useAudioRecording = (
     if (!text) return;
 
     const id = `local-final-${Date.now()}`;
-    // Use current ref count for sequence
     const sequenceNumber = segmentCountRef.current;
     segmentCountRef.current += 1;
 
@@ -129,7 +113,7 @@ export const useAudioRecording = (
       entities: [],
       translatedText: null,
       displayText: text,
-      _sequence: sequenceNumber // Tag for matching
+      _sequence: sequenceNumber
     };
 
     const newSegments = new Map(activeConsultation.transcriptSegments);
@@ -160,27 +144,19 @@ export const useAudioRecording = (
     return { attempted: ordered.length, succeeded: success };
   }, [activeConsultation, activeConsultationId, persistFinalSegment]);
 
-  // --- SYNC / POLLING HELPER ---
-  // Reusable function to fetch backend segments, merge speaker labels/translations,
-  // and add any "tail" segments that might have been saved asynchronously by backend.
+  // --- SYNC HELPER ---
   const syncRemoteSegments = useCallback(async (bypassCache = false) => {
     if (!activeConsultationId) return;
 
     try {
-      // Fetch latest segments to get updated speaker labels and translations
       const res = await apiClient.listTranscriptSegments({
         token: accessToken,
         consultationId: activeConsultationId,
         includeEntities: false,
-        bypassCache // Allow bypassing cache for immediate updates after stop
+        bypassCache
       });
 
       if (res.ok && Array.isArray(res.data)) {
-        // Log one sample occasionally for debug
-        if (res.data.length > 0 && Math.random() < 0.05) { 
-           console.debug("[useAudioRecording] Sync poll sample:", res.data[0]);
-        }
-
         setConsultations(prevConsultations => {
           return prevConsultations.map(c => {
             if (c.id !== activeConsultationId) return c;
@@ -190,10 +166,7 @@ export const useAudioRecording = (
             let updateCount = 0;
             let addCount = 0;
             
-            // Clone map to allow mutation
             const newMap = new Map(localMap);
-
-            // Build a sequence lookup for fallback matching
             const seqToId = new Map();
             for (const [id, seg] of newMap.entries()) {
               if (typeof seg._sequence === 'number') {
@@ -204,76 +177,65 @@ export const useAudioRecording = (
             res.data.forEach(remoteSeg => {
               const rawId = remoteSeg.segment_id ?? remoteSeg.id;
               if (!rawId) return;
-              
               const remoteId = String(rawId);
               
-              // 1. Try matching by ID (Backend ID)
+              // Match by ID or Sequence
               let localId = newMap.has(remoteId) ? remoteId : null;
-
-              // 2. Fallback: Try matching by sequence number
               if (!localId && typeof remoteSeg.sequence_number === 'number') {
-                const seqMatchId = seqToId.get(remoteSeg.sequence_number);
-                if (seqMatchId) {
-                    localId = seqMatchId;
-                    
-                    // Robustness: If we matched by sequence but IDs differ, it means local is temporary ID
-                    // We should swap it now to prevent future mismatch/confusion.
-                    if (localId !== remoteId) {
-                         const segToSwap = newMap.get(localId);
-                         newMap.delete(localId); // Remove old key
-                         const swappedSeg = { ...segToSwap, id: remoteId };
-                         newMap.set(remoteId, swappedSeg); // Add with new key
-                         localId = remoteId; // Update reference for subsequent logic
-                         hasChanges = true; // Mark as changed so UI gets fresh keys
-                    }
+                const seqMatch = seqToId.get(remoteSeg.sequence_number);
+                if (seqMatch) {
+                  // Found by sequence, but ID is different (swap temp ID -> real ID)
+                  localId = seqMatch;
+                  if (localId !== remoteId) {
+                    const existing = newMap.get(localId);
+                    newMap.delete(localId);
+                    newMap.set(remoteId, { ...existing, id: remoteId });
+                    localId = remoteId;
+                    hasChanges = true;
+                  }
                 }
               }
 
               if (localId) {
-                // UPDATE EXISTING
-                // Clone the object properly before mutation to ensure React detects change
-                const oldSeg = newMap.get(localId);
-                const localSeg = { ...oldSeg };
+                // Update existing segment if data differs
+                const localSeg = newMap.get(localId);
                 let segChanged = false;
+                const newSeg = { ...localSeg }; // clone
 
-                // 1. Speaker (Authoritative update if present)
-                const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null;
+                // 1. Speaker
+                const remoteSpeaker = remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker;
                 if (remoteSpeaker && remoteSpeaker !== localSeg.speaker) {
-                  localSeg.speaker = remoteSpeaker;
+                  newSeg.speaker = remoteSpeaker;
                   segChanged = true;
                 }
-
-                // 2. Translation (Authoritative update if present or changed)
-                const remoteTranslation = remoteSeg.translated_text ?? null;
-                if (remoteTranslation !== localSeg.translatedText) {
-                  localSeg.translatedText = remoteTranslation;
-                  segChanged = true;
-                }
-                
-                // 3. Text (Authoritative update - trust backend completely)
-                const remoteText = remoteSeg.original_text ?? remoteSeg.text ?? "";
+                // 2. Text
+                const remoteText = remoteSeg.original_text ?? remoteSeg.text;
                 if (remoteText && remoteText !== localSeg.text) {
-                   localSeg.text = remoteText;
-                   localSeg.displayText = remoteText;
-                   segChanged = true;
+                  newSeg.text = remoteText;
+                  newSeg.displayText = remoteText;
+                  segChanged = true;
+                }
+                // 3. Translation
+                const remoteTrans = remoteSeg.translated_text;
+                if (remoteTrans !== undefined && remoteTrans !== localSeg.translatedText) {
+                  newSeg.translatedText = remoteTrans;
+                  segChanged = true;
                 }
 
                 if (segChanged) {
-                  newMap.set(localId, localSeg);
+                  newMap.set(localId, newSeg);
                   hasChanges = true;
                   updateCount++;
                 }
               } else {
-                // ADD NEW (Missing tail segment)
-                // If we have a remote segment that matches neither ID nor Sequence locally, it's likely a tail segment
-                // that the backend saved but we missed via WebSocket.
+                // Add new missing segment (Tail recovery)
                 const newUiSeg = {
                   id: remoteId,
                   speaker: remoteSeg.speaker_role ?? remoteSeg.speaker_label ?? remoteSeg.speaker ?? null,
                   text: remoteSeg.original_text ?? remoteSeg.text ?? "",
                   displayText: remoteSeg.original_text ?? remoteSeg.text ?? "",
                   translatedText: remoteSeg.translated_text ?? null,
-                  entities: [], // We requested includeEntities: false
+                  entities: [],
                   _sequence: remoteSeg.sequence_number ?? 9999
                 };
                 newMap.set(remoteId, newUiSeg);
@@ -283,27 +245,22 @@ export const useAudioRecording = (
             });
 
             if (updateCount > 0 || addCount > 0) {
-               console.debug(`[Diarization] Sync: Updated ${updateCount}, Added ${addCount} segments.`);
+               console.info(`[Diarization] Sync for ${c.id}: Updated ${updateCount}, Added ${addCount}`);
             }
 
             if (!hasChanges) return c;
-            
-            return {
-              ...c,
-              transcriptSegments: newMap
-            };
+            return { ...c, transcriptSegments: newMap };
           });
         });
       }
     } catch (err) {
-      console.debug("[useAudioRecording] Sync segments error", err);
+      console.error("[useAudioRecording] Sync error", err);
     }
   }, [activeConsultationId, accessToken, setConsultations]);
 
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
     if (!activeConsultation) return;
     const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
-    
     let templateId = null;
     let noteTypeToUse = rawSelectedType;
 
@@ -323,15 +280,10 @@ export const useAudioRecording = (
       return;
     }
 
-    const hadExistingNotes = Boolean(activeConsultation.notes);
     updateConsultation(activeConsultationId, { loading: true, error: null });
 
     try {
-      const encounterTime =
-        activeConsultation.createdAt ||
-        activeConsultation.notesCreatedAt ||
-        new Date().toISOString();
-
+      const encounterTime = activeConsultation.createdAt || new Date().toISOString();
       const profile = activeConsultation.patientProfile || {};
       const patientInfo = {};
 
@@ -340,16 +292,14 @@ export const useAudioRecording = (
       if (profile.dateOfBirth) {
         try {
           const ageVal = calculateAge(profile.dateOfBirth);
-          if (ageVal !== null && ageVal !== undefined) {
-            patientInfo.age = String(ageVal);
-          }
+          if (ageVal) patientInfo.age = String(ageVal);
         } catch {}
       }
       if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
       if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
 
       const requestBody = {
-        consultation_id: activeConsultationId, // Required for backend flush
+        consultation_id: activeConsultationId,
         full_transcript: transcript,
         note_type: noteTypeToUse,
         encounter_time: encounterTime,
@@ -370,8 +320,7 @@ export const useAudioRecording = (
       
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        const detail = data?.detail || `${resp.status} ${resp.statusText}`;
-        throw new Error(detail);
+        throw new Error(data.detail || `${resp.status} ${resp.statusText}`);
       }
 
       updateConsultation(activeConsultationId, {
@@ -388,13 +337,7 @@ export const useAudioRecording = (
       }
     } catch (err) {
       console.error("[useAudioRecording] Failed to generate final note:", err);
-      updateConsultation(activeConsultationId, {
-        loading: false
-      });
-
-      if (!hadExistingNotes) {
-        console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
-      }
+      updateConsultation(activeConsultationId, { loading: false });
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp, accessToken]);
 
@@ -415,11 +358,11 @@ export const useAudioRecording = (
     }
 
     let finalized = false;
-
     if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
       try {
         websocketRef.current.send(new ArrayBuffer(0));
-        await new Promise((r) => setTimeout(r, 700));
+        // Small wait for last backend ack
+        await new Promise((r) => setTimeout(r, 500)); 
         finalized = !activeConsultation.interimTranscript;
       } catch {}
       try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
@@ -429,51 +372,24 @@ export const useAudioRecording = (
       await finalizeInterimSegment();
     }
 
-    // Force an immediate sync to catch any segments the backend saved but we missed (tail sync)
-    // AND check for async Diarization/Translation updates. BYPASS CACHE to get fresh data.
-    await syncRemoteSegments(true);
-    
-    // Aggressive Tail Polling: catch asynchronous backend processing
-    setTimeout(() => {
-        console.debug("[useAudioRecording] Post-stop sync (2s)");
-        syncRemoteSegments(true);
-    }, 2000);
-    setTimeout(() => {
-        console.debug("[useAudioRecording] Post-stop sync (5s)");
-        syncRemoteSegments(true);
-    }, 5000);
-    setTimeout(() => {
-        console.debug("[useAudioRecording] Post-stop sync (10s)");
-        syncRemoteSegments(true);
-    }, 10000);
-
+    // Trigger Note Generation immediately
     try {
       if (activeConsultation.transcriptSegments.size > 0) {
-        await handleGenerateNote();
+        handleGenerateNote();
       }
     } catch (err) {
-      console.error("[useAudioRecording] Note generation failed (patch order):", err);
+      console.error("[useAudioRecording] Note generation trigger failed:", err);
     }
     
-    // Cache warm-up (enrichment)
+    // Background tasks: Enrichment & initial sync
     try {
-      apiClient.enrichTranscriptSegments({ 
-        token: accessToken, 
-        consultationId: activeConsultationId, 
-        force: false 
-      }).catch((e) => {
-         console.warn("[useAudioRecording] Enrichment cache request failed", e);
-      });
+      apiClient.enrichTranscriptSegments({ token: accessToken, consultationId: activeConsultationId, force: false }).catch(() => {});
     } catch (e) {}
-  }, [
-    activeConsultation, 
-    activeConsultationId, 
-    updateConsultation, 
-    finalizeInterimSegment, 
-    syncRemoteSegments, 
-    handleGenerateNote, 
-    accessToken
-  ]);
+
+    // Fire one immediate sync
+    syncRemoteSegments(true);
+
+  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, syncRemoteSegments, handleGenerateNote, accessToken]);
 
   const startMicrophone = useCallback(async () => {
     if (!activeConsultation) return;
@@ -505,7 +421,6 @@ export const useAudioRecording = (
         error: 'Could not access microphone. Please check browser permissions.',
         connectionStatus: 'error'
       });
-      // Safe now: stopSession is initialized
       stopSession(false);
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, stopSession]);
@@ -519,11 +434,9 @@ export const useAudioRecording = (
       activeTab: 'transcript'
     });
 
-    // Initialize sequence tracking based on existing segments
     segmentCountRef.current = activeConsultation.transcriptSegments.size;
 
     try {
-      // Build WS URL: prefer env var; otherwise derive from API URL with correct protocol.
       const buildWsUrl = () => {
         if (BACKEND_WS_URL) return BACKEND_WS_URL;
         if (BACKEND_API_URL) {
@@ -531,17 +444,13 @@ export const useAudioRecording = (
           const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           return `${wsProto}//${api.host}/client-transcribe`;
         }
-        // Fallback (dev): localhost client-transcribe
-        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${wsProto}//localhost:8000/client-transcribe`;
+        return `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:8000/client-transcribe`;
       };
 
       const url = new URL(buildWsUrl());
       if (activeConsultation.language) {
         url.searchParams.set('language_code', activeConsultation.language);
       }
-      
-      // FIXED: Pass consultation_id so backend handles orphans on disconnect
       url.searchParams.set('consultation_id', activeConsultationId);
 
       const ws = new WebSocket(url.toString());
@@ -559,12 +468,11 @@ export const useAudioRecording = (
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
 
-          const segmentsToPersist = []; // Collect finalized segments here
+          const segmentsToPersist = [];
           let interimTranscript = '';
           let interimSpeaker = null;
           let hasShownHint = false;
 
-          // 1. Calculate updates OUTSIDE state updater to get segments for immediate persistence
           results.forEach((result, idx) => {
             const alt = result.Alternatives?.[0];
             if (!alt) return;
@@ -578,10 +486,9 @@ export const useAudioRecording = (
             if (result.IsPartial) {
               interimTranscript = transcriptText;
               interimSpeaker = currentSpeaker;
-              return; // Don't persist partials
+              return;
             }
 
-            // Finalized segment handling
             const uiSegment = prepareSegmentForUi({
               id: result.ResultId,
               speaker: currentSpeaker,
@@ -593,12 +500,10 @@ export const useAudioRecording = (
               endTimeMs,
             });
 
-            // Assign sequence number immediately using Ref
             const sequenceNumber = segmentCountRef.current;
             segmentCountRef.current += 1;
             uiSegment._sequence = sequenceNumber;
 
-            // Mark for UI update AND persistence
             segmentsToPersist.push({
               ui: uiSegment,
               sequenceNumber: sequenceNumber,
@@ -608,33 +513,24 @@ export const useAudioRecording = (
             if (currentSpeaker) hasShownHint = true;
           });
 
-          // 2. Update UI state with all processed segments (and updated interim)
           setConsultations((prevConsultations) => {
             return prevConsultations.map((c) => {
               if (c.id !== activeConsultationId) return c;
-
               const newSegments = new Map(c.transcriptSegments || []);
-              
-              // Add/Update final segments in the map
               segmentsToPersist.forEach(({ ui }) => {
                 newSegments.set(ui.id, ui);
               });
-              
-              // Only update hasShownHint if it changed to true
               const updatedHint = c.hasShownHint || hasShownHint;
-
               return {
                 ...c,
                 transcriptSegments: newSegments,
-                interimTranscript: interimTranscript || "", // Clear if no partial
+                interimTranscript: interimTranscript || "",
                 interimSpeaker: interimSpeaker || null,
                 hasShownHint: updatedHint,
               };
             });
           });
 
-          // 3. IMMEDIATE PERSISTENCE (Optimistic)
-          // Fire API calls immediately. We don't await them blocking the loop; we fire parallel requests.
           segmentsToPersist.forEach(({ ui, sequenceNumber, detectedLanguage }) => {
              persistFinalSegment(ui, sequenceNumber, detectedLanguage).catch(err => {
                 console.error(`[useAudioRecording] Immediate persist failed for seq ${sequenceNumber}`, err);
@@ -690,27 +586,54 @@ export const useAudioRecording = (
   }, [activeConsultationId, updateConsultation]);
 
   const debugTranscriptSegments = useCallback(() => {}, []);
+  const syncAllTranscriptSegments = useCallback(async () => await persistAllSegments(), [persistAllSegments]);
 
-  // NEW: expose a helper used by App.jsx debug button
-  const syncAllTranscriptSegments = useCallback(async () => {
-    return await persistAllSegments();
-  }, [persistAllSegments]);
-
-  // Polling for speaker diarization updates (Semantic Diarization)
+  // LIVE POLLING: When active
   useEffect(() => {
     const isSessionActive = 
       activeConsultation?.sessionState === 'recording' || 
       activeConsultation?.sessionState === 'paused';
 
-    if (!activeConsultationId || !isSessionActive) return;
+    if (!activeConsultationId || !isSessionActive) {
+      return;
+    }
 
-    // Poll frequently (5s) to get near-realtime updates
-    const POLL_INTERVAL = 5000; 
-
-    // Use the refactored sync function
-    const intervalId = setInterval(syncRemoteSegments, POLL_INTERVAL);
+    const POLL_INTERVAL = 5000;
+    const intervalId = setInterval(() => syncRemoteSegments(false), POLL_INTERVAL);
     return () => clearInterval(intervalId);
   }, [activeConsultationId, activeConsultation?.sessionState, syncRemoteSegments]);
+
+  // TAIL POLLING: After stop
+  // This separate effect ensures we poll aggressively even if the WS closed and stopped logic finished
+  useEffect(() => {
+    const isStopped = activeConsultation?.sessionState === 'stopped';
+    
+    if (!activeConsultationId || !isStopped) {
+      isTailPollingRef.current = false;
+      return;
+    }
+
+    // Only start tail polling sequence if we haven't already done it for this session stop
+    // (A rough heuristic: if we just switched to stopped, run this)
+    
+    const runTailSequence = async () => {
+      console.info("[useAudioRecording] Starting aggressive tail polling for diarization...");
+      
+      // Poll at 2s, 5s, 10s, 15s, 30s
+      const delays = [2000, 5000, 10000, 15000, 30000];
+      
+      for (const delay of delays) {
+        if (activeConsultationId !== activeConsultation.id) break; // Stop if user switched
+        await new Promise(r => setTimeout(r, delay - (delays[delays.indexOf(delay)-1] || 0)));
+        // console.debug(`[useAudioRecording] Tail poll at ${delay}ms`);
+        await syncRemoteSegments(true);
+      }
+      console.info("[useAudioRecording] Tail polling complete.");
+    };
+
+    runTailSequence();
+
+  }, [activeConsultation?.sessionState, activeConsultationId, syncRemoteSegments]);
 
   return {
     startSession,
