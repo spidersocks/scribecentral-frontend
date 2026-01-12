@@ -1011,17 +1011,8 @@ export const NoteEditor = ({
           // 2. Skip if items is empty array
           if (Array.isArray(items) && items.length === 0) return null;
 
-          // 3. Skip if items is exactly the string "None"
-          if (typeof items === "string" && items.trim() === "None") return null;
-
-          // 4. Check object types where all values are "None"
-          const isObjectNone =
-            typeof items === "object" &&
-            !Array.isArray(items) &&
-            items !== null &&
-            Object.values(items).every((v) => v === "None");
-
-          if (isObjectNone) return null; // FIX: Don't render "None" sections at all
+          // REMOVED: Logic that hides sections if value is "None"
+          // We now allow "None" to be displayed so users can edit it.
 
           return (
             <div key={section}>
