@@ -22,6 +22,9 @@ export const useAudioRecording = (
   const sessionStateRef = useRef('idle');
   const segmentCountRef = useRef(0);
   
+  // RESTORED MISSING REF
+  const persistedCountRef = useRef(0); 
+  
   // Track if we are currently in the "tail polling" phase
   const isTailPollingRef = useRef(false);
 

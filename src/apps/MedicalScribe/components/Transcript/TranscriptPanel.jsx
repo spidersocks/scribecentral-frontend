@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { TranscriptSegment } from "./TranscriptSegment";
 import { getFriendlySpeakerLabel } from "../../utils/helpers";
 import { LoadingAnimation } from "../shared/LoadingAnimation";
@@ -6,20 +6,35 @@ import styles from "./TranscriptPanel.module.css";
 
 export const TranscriptPanel = ({
   activeConsultation,
-  transcriptEndRef,
+  transcriptEndRef, // This ref is still useful for initial load or manual scroll to bottom
   onSpeakerRoleToggle,
   renderActionButtons,
   getStatusDisplay,
   updateConsultation,
   activeConsultationId,
 }) => {
+  const containerRef = useRef(null);
   const noSegmentsYet = activeConsultation.transcriptSegments.size === 0;
   const isIdleOrStopped = ["idle", "stopped"].includes(activeConsultation.sessionState);
   const isActiveSession = ["recording", "paused", "connecting"].includes(
     activeConsultation.sessionState
   );
 
-  // Note: Removed auto speaker role heuristic. Roles will remain as-is unless the user toggles them.
+  // Auto-scroll logic
+  useEffect(() => {
+    // Only auto-scroll if session is active or we just loaded a transcript
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    
+    // Check if user is near bottom (within 100px)
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+
+    // Always scroll on first load of content
+    if (activeConsultation.transcriptSegments.size > 0 && isNearBottom) {
+       container.scrollTop = container.scrollHeight;
+    }
+  }, [activeConsultation.transcriptSegments, activeConsultation.interimTranscript]);
 
   return (
     <>
@@ -35,7 +50,7 @@ export const TranscriptPanel = ({
           {renderActionButtons()}
         </div>
       )}
-      <div className={styles.transcriptBox}>
+      <div className={styles.transcriptBox} ref={containerRef}>
         {activeConsultation.transcriptLoading && !isActiveSession ? (
           <div className={styles.loadingContainer}>
             <LoadingAnimation message="Loading transcript..." />
@@ -70,7 +85,8 @@ export const TranscriptPanel = ({
                 ]: {activeConsultation.interimTranscript}
               </p>
             )}
-            <div ref={transcriptEndRef} />
+            {/* Keeping the ref here for external control if needed, but scrolling is primarily handled by containerRef */}
+            <div ref={transcriptEndRef} style={{ float: "left", clear: "both" }} />
           </>
         ) : null}
       </div>

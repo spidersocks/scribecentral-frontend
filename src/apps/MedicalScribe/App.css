@@ -48,13 +48,17 @@ body {
   background-color: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent body scroll when app-shell handles it */
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* App shell fills viewport and has light background so no black shows */
+/* App shell fills viewport */
 .app-shell {
   display: grid;
   grid-template-columns: 300px 1fr;
-  min-height: 100vh;
+  height: 100vh; /* Fixed height */
+  overflow: hidden; /* No scroll on shell */
   background-color: var(--bg-primary);
 }
 
@@ -63,7 +67,9 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
   background-color: var(--bg-primary);
+  overflow: hidden; /* Prevent main area from scrolling itself */
 }
 
 /* Global account controls */
@@ -254,13 +260,13 @@ body {
   gap: 0.5rem;
 }
 
-/* Workspace gets the page background to remove dark gutters */
+/* Workspace fills remaining height and prevents external scroll */
 .workspace {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
+  display: flex; /* Changed from grid to flex for height control */
+  flex-direction: column;
+  height: 100%;
   padding: 1rem;
-  align-items: stretch;
+  overflow: hidden; /* Clip overflow here */
   background-color: var(--bg-primary);
 }
 
@@ -270,7 +276,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  min-height: 400px;
+  height: 100%;
 }
 
 /* Panel and content */
@@ -286,16 +292,16 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-
-  /* IMPORTANT: let the panel grow; avoid clipping/black background below */
-  max-height: none;
-  overflow: visible;
-  background-clip: padding-box;
+  
+  /* UPDATED: Fill height and clip overflow */
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .panel-header-sticky {
-  position: sticky;
-  top: 0;
+  /* It's inside a flex column now, no need for sticky unless panel scrolls (it won't) */
+  flex-shrink: 0;
   z-index: 10;
   background: var(--bg-primary);
   border-radius: 0;
@@ -362,8 +368,9 @@ body {
 .tab-content {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden; /* Handle inner scroll in children */
   flex: 1;
+  height: 100%;
 }
 
 /* Entities */

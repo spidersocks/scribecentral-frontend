@@ -9,6 +9,7 @@
   border-bottom: 1px solid #eef2f6;
   background-color: #ffffff; /* white */
   min-height: 200px;  /* better centering */
+  flex-shrink: 0; /* Don't shrink controls */
 }
 
 /* Language selector */
@@ -56,6 +57,7 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid #eef2f6;
   background-color: #ffffff; /* white */
+  flex-shrink: 0; /* Don't shrink controls */
 }
 
 /* Status pill */
@@ -74,17 +76,18 @@
 
 /* Scrollable transcript container */
 .transcriptBox {
-  flex: 1 1 auto;
+  flex: 1; /* Take up all remaining vertical space */
   display: flex;
   flex-direction: column;
   gap: 0.4rem; /* reduced spacing between segments */
-  overflow-y: auto;
+  overflow-y: auto; /* Scroll inside this box */
   -webkit-overflow-scrolling: touch;
   font-size: 1rem;
   line-height: 1.7;
   padding: 1.25rem;
   background: #ffffff;     /* white surface */
   color: #1a202c;          /* primary text */
+  scroll-behavior: smooth;
 }
 
 /* Optional custom scrollbar for better UX */
@@ -136,11 +139,6 @@
   .inTranscriptControls {
     padding: 1.5rem 1rem;
   }
-
-  /* Remove nested scrolling on mobile/tablet; let page scroll instead */
-  .transcriptBox {
-    overflow: visible;
-  }
 }
 
 @media (max-width: 768px) {
@@ -150,16 +148,6 @@
   }
   .action-buttons .button {
     width: 100%;
-  }
-
-  /* Keep controls accessible at the bottom while scrolling */
-  .recordingControlsBar {
-    position: sticky;
-    bottom: 0;
-    border-top: 1px solid var(--border-color);
-    border-bottom: none;
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
-    z-index: 3;
   }
 
   .statusDisplay {
