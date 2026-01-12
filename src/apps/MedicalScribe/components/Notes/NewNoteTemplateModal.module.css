@@ -6,7 +6,7 @@
 .modalBody {
   padding: 16px 20px;
   max-height: 64vh;
-  overflow: auto;
+  overflow:  auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -20,8 +20,9 @@
 .label {
   display: inline-block;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom:  6px;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .req {
@@ -32,8 +33,8 @@
 /* Base control styling reduced padding for compactness */
 .control {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border-color, #ddd);
+  padding:  8px 10px;
+  border:  1px solid var(--border-color, #ddd);
   border-radius: 6px;
   font-size: 13px;
   background: #ffffff;
@@ -63,8 +64,9 @@
 }
 
 .sectionsTitle {
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 600;
+  font-size: 14px;   
+  color: var(--text-primary);
 }
 
 .sectionsCount {
@@ -83,13 +85,13 @@
 /* Each section row becomes compact and uses relative positioning so remove icon sits over it */
 .sectionRow {
   position: relative;
-  border: 1px solid var(--border-color, #eee);
+  border:  1px solid var(--border-color, #eee);
   border-radius: 8px;
   padding: 10px;
   background: #fff;
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items:  flex-start;
 }
 
 /* inner column holds labels + controls */
@@ -111,6 +113,7 @@
   border: 1px solid var(--border-color, #ddd);
   font-size: 13px;
   width: 100%;
+  color: var(--text-primary);
 }
 
 /* description textarea slightly smaller by default */
@@ -123,6 +126,7 @@
   resize: vertical;
   min-height: 56px;
   max-height: 240px;
+  color: var(--text-primary);
 }
 
 /* compact labels */
@@ -141,7 +145,7 @@
   top: 8px;
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius:  999px;
   border: 1px solid rgba(0,0,0,0.06);
   background: #fff;
   color: #b91c1c;
@@ -175,7 +179,7 @@
   border: 1px solid var(--border-color, #ddd);
   padding: 6px 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size:  13px;
   cursor: pointer;
 }
 
@@ -190,7 +194,7 @@
   margin-top: 8px;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0. 5rem;
 }
 
 .hiddenFileInput {

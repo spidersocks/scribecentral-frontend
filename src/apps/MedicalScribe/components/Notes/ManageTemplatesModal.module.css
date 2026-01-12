@@ -5,13 +5,17 @@
   flex-direction: column;
 }
 
+.modalContent :global(.modal-title) {
+  color: var(--text-primary, #111827);
+}
+
 .list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 20px;
   max-height: 56vh;
-  overflow: auto;
+  overflow:  auto;
 }
 
 .templateRow {
@@ -46,7 +50,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size:  13px;
   color: var(--text-secondary, #6b7280);
 }
 
@@ -76,7 +80,7 @@
   border: 1px solid var(--border-color, #e5e7eb);
   padding: 8px 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size:  13px;
 }
 
 .button-danger {
@@ -91,6 +95,7 @@
 .empty {
   text-align: center;
   padding: 24px 8px;
+  color: var(--text-primary); /* ADD THIS LINE */
 }
 
 .subtle {
