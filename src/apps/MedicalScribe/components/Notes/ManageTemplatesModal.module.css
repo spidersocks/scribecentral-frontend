@@ -110,6 +110,6 @@
   font-size: 13px;
 }
 
-:global(.modal-title) {
+:global(.modal-header h3) {
   color: #1a202c !important;
 }
