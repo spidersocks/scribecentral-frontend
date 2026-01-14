@@ -1538,3 +1538,26 @@ body {
     width: 100%;
   }
 }
+
+/* ============================================
+   RESPONSIVE DESIGN - SMALL MOBILE (700px)
+   ============================================ */
+@media (max-width: 700px) {
+  .app-shell {
+    display: block;
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    height: auto;
+    overflow-x: hidden;
+  }
+  .app-main, .workspace, .panel {
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    height: auto;
+  }
+  .workspace {
+    padding: 0.5rem;
+  }
+}
