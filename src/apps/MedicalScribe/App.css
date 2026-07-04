@@ -948,6 +948,30 @@ body {
   display: flex;
 }
 
+.free-tier-notice-modal {
+  max-width: 520px;
+}
+
+.free-tier-notice-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.backend-warmup-overlay {
+  z-index: 1300;
+}
+
+.backend-warmup-modal {
+  max-width: 540px;
+}
+
+.backend-warmup-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
 /* Start screen */
 .start-logo {
   height: 120px;

@@ -76,6 +76,22 @@ const _noteTypesCache = new Map(); // key -> Promise resolving to note types arr
 const _segmentsMemo = new Map(); // key -> { ts: number, res: { ok, status, data, error } }
 const SEGMENTS_TTL_MS = 2000;
 
+const _backendWarmupState = {
+  inFlight: null,
+  lastReadyAt: 0,
+};
+const BACKEND_READY_CACHE_MS = 45000;
+
+async function apiRequestWithTimeout(path, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await apiRequest(path, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export const apiClient = {
   listPatients: ({ token, userId, signal } = {}) =>
     apiRequest("/patients", {
@@ -241,6 +257,65 @@ export const apiClient = {
       method: "DELETE",
       accessToken: token,
     }),
+
+  pingBackend: async ({ timeoutMs = 7000 } = {}) => {
+    const probePaths = ["/healthz", "/health", "/note-types"];
+    let lastError = null;
+
+    for (const path of probePaths) {
+      const result = await apiRequestWithTimeout(path, timeoutMs);
+      if (result.ok) {
+        return {
+          ...result,
+          data: {
+            endpoint: path,
+            payload: result.data,
+          },
+        };
+      }
+      lastError = result.error;
+    }
+
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: lastError || new Error("Backend did not respond to readiness probes"),
+    };
+  },
+
+  warmupBackend: ({ timeoutMs = 7000, force = false } = {}) => {
+    if (
+      !force &&
+      _backendWarmupState.lastReadyAt > 0 &&
+      Date.now() - _backendWarmupState.lastReadyAt < BACKEND_READY_CACHE_MS
+    ) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        data: { endpoint: "cache", payload: { status: "ok" } },
+      });
+    }
+
+    if (_backendWarmupState.inFlight) {
+      return _backendWarmupState.inFlight;
+    }
+
+    const promise = apiClient
+      .pingBackend({ timeoutMs })
+      .then((result) => {
+        if (result.ok) {
+          _backendWarmupState.lastReadyAt = Date.now();
+        }
+        return result;
+      })
+      .finally(() => {
+        _backendWarmupState.inFlight = null;
+      });
+
+    _backendWarmupState.inFlight = promise;
+    return promise;
+  },
 
   /**
    * Get cached note types. Optionally pass { userId } to include user templates.

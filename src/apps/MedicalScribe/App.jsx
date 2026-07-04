@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./App.css";
 import { useAuth } from "./AuthGate";
 import { getAssetPath } from "./utils/helpers";
@@ -15,6 +15,7 @@ import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
 import { syncService } from "./utils/syncService";
 import { ensureAwsCredentials } from "./utils/awsClients"; // NEW
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
+import { useBackendReadiness } from "./hooks/useBackendReadiness";
 import './utils/debugUtils';
 
 // Extracted components for better organization
@@ -96,6 +97,89 @@ export default function MedicalScribeApp() {
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [showServerNoticeModal, setShowServerNoticeModal] = useState(false);
+  const [warmupGate, setWarmupGate] = useState({
+    visible: false,
+    status: "idle",
+    message: "",
+  });
+
+  const {
+    isReady: isBackendReady,
+    startWarmup,
+    ensureReady,
+  } = useBackendReadiness({ autoStart: false });
+
+  const ensureBackendReadyBeforeRecording = useCallback(async () => {
+    if (isBackendReady) return true;
+
+    setWarmupGate({
+      visible: true,
+      status: "warming",
+      message: "Waking backend server...",
+    });
+
+    const result = await ensureReady({
+      maxWaitMs: 90000,
+      onProgress: (nextMessage) => {
+        setWarmupGate((prev) => ({
+          ...prev,
+          visible: true,
+          status: "warming",
+          message: nextMessage,
+        }));
+      },
+    });
+
+    if (result.ok) {
+      setWarmupGate({ visible: false, status: "ready", message: "" });
+      return true;
+    }
+
+    setWarmupGate({
+      visible: true,
+      status: "timeout",
+      message:
+        "The free server is still waking up. Retry to keep waiting, or cancel and try again shortly.",
+    });
+    return false;
+  }, [ensureReady, isBackendReady]);
+
+  const handleWarmupRetry = useCallback(async () => {
+    setWarmupGate({
+      visible: true,
+      status: "warming",
+      message: "Retrying backend warmup...",
+    });
+
+    const result = await ensureReady({
+      maxWaitMs: 60000,
+      onProgress: (nextMessage) => {
+        setWarmupGate((prev) => ({
+          ...prev,
+          visible: true,
+          status: "warming",
+          message: nextMessage,
+        }));
+      },
+    });
+
+    if (result.ok) {
+      setWarmupGate({ visible: false, status: "ready", message: "" });
+      return;
+    }
+
+    setWarmupGate({
+      visible: true,
+      status: "timeout",
+      message:
+        "The server is still spinning up. Please wait a little longer and try again.",
+    });
+  }, [ensureReady]);
+
+  const handleWarmupCancel = useCallback(() => {
+    setWarmupGate({ visible: false, status: "idle", message: "" });
+  }, []);
 
   // Refs
   const transcriptEndRef = useRef(null);
@@ -116,7 +200,8 @@ export default function MedicalScribeApp() {
     resetConsultation,
     setConsultations,
     finalizeConsultationTimestamp,
-    accessToken
+    accessToken,
+    { ensureBackendReady: ensureBackendReadyBeforeRecording }
   );
 
   // Handle sign out with a final background flush (no UI needed)
@@ -137,6 +222,20 @@ export default function MedicalScribeApp() {
     if (!user) return;
     ensureAwsCredentials({ silentIfSignedOut: true }).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    startWarmup();
+  }, [startWarmup]);
+
+  // Show a one-time notice per browser session about free-tier cold starts.
+  useEffect(() => {
+    const noticeKey = "stethoscribe-free-tier-notice-shown";
+    const hasSeenNotice = window.sessionStorage.getItem(noticeKey);
+
+    if (!hasSeenNotice) {
+      setShowServerNoticeModal(true);
+    }
+  }, []);
   // Core application state
 
   // NOTE: Removed automatic scroll-to-bottom on transcript tab to prevent page jumping.
@@ -257,6 +356,11 @@ export default function MedicalScribeApp() {
     addNewPatient(patientData);
     setShowNewPatientModal(false);
     setSidebarOpen(false);
+  };
+
+  const handleCloseServerNoticeModal = () => {
+    window.sessionStorage.setItem("stethoscribe-free-tier-notice-shown", "true");
+    setShowServerNoticeModal(false);
   };
 
   // Debugging function that now syncs ALL transcript segments
@@ -520,6 +624,81 @@ export default function MedicalScribeApp() {
           onClose={() => setShowNewPatientModal(false)}
           onSave={handleAddNewPatient}
         />
+      )}
+
+      {showServerNoticeModal && (
+        <div className="modal-overlay" onClick={handleCloseServerNoticeModal}>
+          <div
+            className="modal-content free-tier-notice-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="free-tier-notice-title"
+          >
+            <div className="modal-header">
+              <h3 id="free-tier-notice-title" className="modal-title">Server Warm-Up Notice</h3>
+            </div>
+            <div className="modal-body">
+              <p className="free-tier-notice-text">
+                This prototype is running on a free server plan. If the app has been inactive,
+                the first load may take a little longer while the server spins up.
+              </p>
+            </div>
+            <div className="modal-footer modal-footer-buttons">
+              <button
+                type="button"
+                onClick={handleCloseServerNoticeModal}
+                className="button button-primary"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {warmupGate.visible && (
+        <div className="modal-overlay backend-warmup-overlay">
+          <div
+            className="modal-content backend-warmup-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="backend-warmup-title"
+          >
+            <div className="modal-header">
+              <h3 id="backend-warmup-title" className="modal-title">
+                Preparing Transcription Service
+              </h3>
+            </div>
+            <div className="modal-body">
+              {warmupGate.status === "warming" ? (
+                <LoadingAnimation
+                  message={warmupGate.message || "Waking backend server..."}
+                />
+              ) : (
+                <p className="backend-warmup-text">{warmupGate.message}</p>
+              )}
+            </div>
+            {warmupGate.status === "timeout" && (
+              <div className="modal-footer modal-footer-buttons">
+                <button
+                  type="button"
+                  onClick={handleWarmupCancel}
+                  className="button button-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleWarmupRetry}
+                  className="button button-primary"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

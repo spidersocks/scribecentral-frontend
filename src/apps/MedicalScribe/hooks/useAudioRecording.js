@@ -13,8 +13,10 @@ export const useAudioRecording = (
   resetConsultation,
   setConsultations,
   finalizeConsultationTimestamp,
-  accessToken
+  accessToken,
+  options = {}
 ) => {
+  const { ensureBackendReady } = options;
   const websocketRef = useRef(null);
   const microphoneStreamRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -430,6 +432,28 @@ export const useAudioRecording = (
 
   const startSession = useCallback(async () => {
     if (!activeConsultation) return;
+
+    if (ensureBackendReady) {
+      try {
+        const ready = await ensureBackendReady();
+        if (!ready) {
+          updateConsultation(activeConsultationId, {
+            sessionState: "idle",
+            connectionStatus: "disconnected",
+            error: "Backend is still waking up. Please try again in a moment.",
+          });
+          return;
+        }
+      } catch (error) {
+        updateConsultation(activeConsultationId, {
+          sessionState: "idle",
+          connectionStatus: "error",
+          error: "Backend warmup check failed. Please try again.",
+        });
+        return;
+      }
+    }
+
     resetConsultation(activeConsultationId);
     updateConsultation(activeConsultationId, {
       sessionState: 'connecting',
@@ -576,7 +600,8 @@ export const useAudioRecording = (
     prepareSegmentForUi,
     persistFinalSegment,
     stopSession,
-    accessToken
+    accessToken,
+    ensureBackendReady
   ]);
 
   const handlePause = useCallback(async () => {

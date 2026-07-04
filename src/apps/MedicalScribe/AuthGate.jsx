@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { getAssetPath } from "./utils/helpers";
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
+import { apiClient } from "./utils/apiClient";
 import styles from "./AuthGate.module.css";
 
 const STATUS = {
@@ -143,6 +144,11 @@ export function AuthGate({ children }) {
   useEffect(() => {
     checkSession();
   }, [checkSession]);
+
+  useEffect(() => {
+    // Kick off backend warmup early so first recording action feels faster.
+    apiClient.warmupBackend({ timeoutMs: 7000 }).catch(() => {});
+  }, []);
 
   const handleSignIn = useCallback(async () => {
     try {
