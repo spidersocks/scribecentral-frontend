@@ -65,7 +65,9 @@ export default function MedicalScribeDemo() {
     updateConsultation,
     resetConsultation,
     setConsultationsLikeList,
-    finalizeConsultationTimestamp
+    finalizeConsultationTimestamp,
+    undefined,
+    { persistRemote: false }
   );
 
   useEffect(() => {

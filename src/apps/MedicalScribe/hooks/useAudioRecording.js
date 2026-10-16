@@ -16,7 +16,8 @@ export const useAudioRecording = (
   accessToken,
   options = {}
 ) => {
-  const { ensureBackendReady } = options;
+  const { ensureBackendReady, persistRemote = true } = options;
+  const persistRemoteRef = useRef(persistRemote);
   const websocketRef = useRef(null);
   const microphoneStreamRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -38,6 +39,7 @@ export const useAudioRecording = (
   }, [activeConsultation]);
 
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
+    if (!persistRemoteRef.current) return true;
     try {
       const payload = {
         sequence_number: sequenceNumber,
@@ -151,6 +153,7 @@ export const useAudioRecording = (
 
   // --- SYNC HELPER ---
   const syncRemoteSegments = useCallback(async (bypassCache = false) => {
+    if (!persistRemoteRef.current) return;
     if (!activeConsultationId) return;
 
     try {
@@ -304,11 +307,13 @@ export const useAudioRecording = (
       if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
 
       const requestBody = {
-        consultation_id: activeConsultationId,
         full_transcript: transcript,
         note_type: noteTypeToUse,
         encounter_time: encounterTime,
       };
+      if (persistRemoteRef.current) {
+        requestBody.consultation_id = activeConsultationId;
+      }
       if (templateId) requestBody.template_id = templateId;
       if (Object.keys(patientInfo).length > 0) {
         requestBody.patient_info = patientInfo;
@@ -386,13 +391,15 @@ export const useAudioRecording = (
       console.error("[useAudioRecording] Note generation trigger failed:", err);
     }
     
-    // Background tasks: Enrichment & initial sync
-    try {
-      apiClient.enrichTranscriptSegments({ token: accessToken, consultationId: activeConsultationId, force: false }).catch(() => {});
-    } catch (e) {}
+    // Signed-in sessions sync speaker labels from stored segments.
+    // Demo sessions must not read or write those records.
+    if (persistRemoteRef.current) {
+      try {
+        apiClient.enrichTranscriptSegments({ token: accessToken, consultationId: activeConsultationId, force: false }).catch(() => {});
+      } catch (e) {}
 
-    // Fire one immediate sync
-    syncRemoteSegments(true);
+      syncRemoteSegments(true);
+    }
 
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, syncRemoteSegments, handleGenerateNote, accessToken]);
 
@@ -478,7 +485,9 @@ export const useAudioRecording = (
       if (activeConsultation.language) {
         url.searchParams.set('language_code', activeConsultation.language);
       }
-      url.searchParams.set('consultation_id', activeConsultationId);
+      if (persistRemoteRef.current) {
+        url.searchParams.set('consultation_id', activeConsultationId);
+      }
 
       const ws = new WebSocket(url.toString());
       websocketRef.current = ws;
@@ -622,7 +631,7 @@ export const useAudioRecording = (
       activeConsultation?.sessionState === 'recording' || 
       activeConsultation?.sessionState === 'paused';
 
-    if (!activeConsultationId || !isSessionActive) {
+    if (!persistRemoteRef.current || !activeConsultationId || !isSessionActive) {
       return;
     }
 
@@ -636,7 +645,7 @@ export const useAudioRecording = (
   useEffect(() => {
     const isStopped = activeConsultation?.sessionState === 'stopped';
     
-    if (!activeConsultationId || !isStopped) {
+    if (!persistRemoteRef.current || !activeConsultationId || !isStopped) {
       isTailPollingRef.current = false;
       return;
     }

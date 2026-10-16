@@ -15,7 +15,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { getAssetPath } from "./utils/helpers";
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
-import { apiClient } from "./utils/apiClient";
 import { getAuthRedirectUri } from "../../aws/amplifyConfig";
 import styles from "./AuthGate.module.css";
 
@@ -145,11 +144,6 @@ export function AuthGate({ children }) {
   useEffect(() => {
     checkSession();
   }, [checkSession]);
-
-  useEffect(() => {
-    // Kick off backend warmup early so first recording action feels faster.
-    apiClient.warmupBackend({ timeoutMs: 7000 }).catch(() => {});
-  }, []);
 
   const handleSignIn = useCallback(async () => {
     try {
@@ -326,14 +320,14 @@ function LandingView({ onSignIn, onSignUp, onTryDemo }) {
     <div className={styles.landingWrapper}>
       <div className={styles.landingInner}>
         <div className={styles.landingContent}>
-          <span className={styles.heroTag}>AI Clinical Documentation</span>
+          <span className={styles.heroTag}>Unmaintained demo</span>
           <h1 className={styles.heroTitle}>
-            StethoscribeAI keeps your focus on patients, not paperwork.
+            This is a demo, and it is no longer being maintained.
           </h1>
           <p className={styles.heroSubtitle}>
-            Stream consultations in real-time, intelligently extract key medical
-            information, and generate polished clinical notes in seconds. Built
-            for busy providers who need trust, accuracy, and speed.
+            StethoscribeAI is left online so you can try real-time transcription
+            and sample notes. It is not an active product, and nothing here is
+            being updated.
           </p>
 
           <div className={styles.badgeRow}>
@@ -371,19 +365,7 @@ function LandingView({ onSignIn, onSignUp, onTryDemo }) {
                 className={styles.mediaLogo}
               />
               <div className={styles.mediaHeaderText}>
-                <span className={styles.mediaTitle}>See it in action</span>
-                <span className={styles.mediaSubtitle}>
-                  Animated walkthrough video coming soon...
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.mediaPlaceholder}>
-              <div className={styles.mediaPlaceholderInner}>
-                <span role="img" aria-hidden="true" className={styles.mediaEmoji}>
-                  🎥
-                </span>
-                <p className={styles.mediaHint}>Not yet implemented!</p>
+                <span className={styles.mediaTitle}>What you can still try</span>
               </div>
             </div>
 

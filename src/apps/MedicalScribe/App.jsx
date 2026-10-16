@@ -97,7 +97,6 @@ export default function MedicalScribeApp() {
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
-  const [showServerNoticeModal, setShowServerNoticeModal] = useState(false);
   const [warmupGate, setWarmupGate] = useState({
     visible: false,
     status: "idle",
@@ -227,15 +226,6 @@ export default function MedicalScribeApp() {
     startWarmup();
   }, [startWarmup]);
 
-  // Show a one-time notice per browser session about free-tier cold starts.
-  useEffect(() => {
-    const noticeKey = "stethoscribe-free-tier-notice-shown";
-    const hasSeenNotice = window.sessionStorage.getItem(noticeKey);
-
-    if (!hasSeenNotice) {
-      setShowServerNoticeModal(true);
-    }
-  }, []);
   // Core application state
 
   // NOTE: Removed automatic scroll-to-bottom on transcript tab to prevent page jumping.
@@ -356,11 +346,6 @@ export default function MedicalScribeApp() {
     addNewPatient(patientData);
     setShowNewPatientModal(false);
     setSidebarOpen(false);
-  };
-
-  const handleCloseServerNoticeModal = () => {
-    window.sessionStorage.setItem("stethoscribe-free-tier-notice-shown", "true");
-    setShowServerNoticeModal(false);
   };
 
   // Debugging function that now syncs ALL transcript segments
@@ -624,37 +609,6 @@ export default function MedicalScribeApp() {
           onClose={() => setShowNewPatientModal(false)}
           onSave={handleAddNewPatient}
         />
-      )}
-
-      {showServerNoticeModal && (
-        <div className="modal-overlay" onClick={handleCloseServerNoticeModal}>
-          <div
-            className="modal-content free-tier-notice-modal"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="free-tier-notice-title"
-          >
-            <div className="modal-header">
-              <h3 id="free-tier-notice-title" className="modal-title">Server Warm-Up Notice</h3>
-            </div>
-            <div className="modal-body">
-              <p className="free-tier-notice-text">
-                This prototype is running on a free server plan. If the app has been inactive,
-                the first load may take a little longer while the server spins up.
-              </p>
-            </div>
-            <div className="modal-footer modal-footer-buttons">
-              <button
-                type="button"
-                onClick={handleCloseServerNoticeModal}
-                className="button button-primary"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {warmupGate.visible && (

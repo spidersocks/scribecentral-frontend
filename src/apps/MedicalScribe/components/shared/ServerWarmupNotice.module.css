@@ -1,0 +1,49 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal {
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  color: #1a202c;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+
+.title {
+  margin: 0;
+  padding: 1.25rem 1.25rem 0;
+  font-size: 1.15rem;
+}
+
+.text {
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  line-height: 1.5;
+  color: #3d4a5c;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid #e6eaf0;
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.55rem 1.2rem;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
