@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { getAssetPath } from "./utils/helpers";
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
 import { apiClient } from "./utils/apiClient";
+import { getAuthRedirectUri } from "../../aws/amplifyConfig";
 import styles from "./AuthGate.module.css";
 
 const STATUS = {
@@ -166,7 +167,7 @@ export function AuthGate({ children }) {
   const signUpUrl = useMemo(() => {
     const domain = import.meta.env.VITE_COGNITO_DOMAIN?.replace(/\/$/, "");
     const clientId = import.meta.env.VITE_COGNITO_APP_CLIENT_ID;
-    const redirectUri = import.meta.env.VITE_COGNITO_REDIRECT_URI;
+    const redirectUri = getAuthRedirectUri();
     const scopes = ["openid", "email", "profile"].join(" ");
 
     if (!domain || !clientId || !redirectUri) {

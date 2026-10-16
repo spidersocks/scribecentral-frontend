@@ -1,9 +1,18 @@
 import { Amplify } from 'aws-amplify';
 
-// Prefer the live origin; fall back to env if needed
+// Prefer the live page; fall back to env if needed.
+// Cognito matches this string exactly, including the /stethoscribe path.
 const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN?.replace(/^https?:\/\//, '');
-const runtimeOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-const redirect = runtimeOrigin || import.meta.env.VITE_COGNITO_REDIRECT_URI || "https://scribecentral.io/";
+const appBasePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+
+export function getAuthRedirectUri() {
+  if (typeof window === "undefined") {
+    return import.meta.env.VITE_COGNITO_REDIRECT_URI || "https://www.seanfontaine.dev/stethoscribe";
+  }
+  return `${window.location.origin}${appBasePath}`;
+}
+
+const redirect = getAuthRedirectUri();
 
 // DEBUG LOGS
 console.info("[amplifyConfig] window.origin", window.location.origin);

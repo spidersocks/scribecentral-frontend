@@ -3,8 +3,9 @@ export const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL || "";
 export const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
 
 // Example production configuration:
-// VITE_BACKEND_API_URL = https://api.scribecentral.io
-// VITE_BACKEND_WS_URL  = wss://api.scribecentral.io/client-transcribe
+// Production values are set on the Vercel project, not in this file.
+// VITE_BACKEND_API_URL = https://medical-scribe-1j17.onrender.com
+// VITE_BACKEND_WS_URL  = wss://medical-scribe-1j17.onrender.com/client-transcribe
 
 export const DEFAULT_NOTE_TYPES = [
   { id: "standard", name: "Standard Clinical Note" },

@@ -1,6 +1,18 @@
 {
+  "redirects": [
+    { "source": "/", "destination": "/stethoscribe", "permanent": false },
+    {
+      "source": "/medical-scribe/demo",
+      "destination": "/stethoscribe/medical-scribe/demo",
+      "permanent": false
+    }
+  ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/stethoscribe/assets/:path*", "destination": "/assets/:path*" },
+    { "source": "/stethoscribe/:file.:ext", "destination": "/:file.:ext" },
+    { "source": "/stethoscribe", "destination": "/index.html" },
+    { "source": "/stethoscribe/", "destination": "/index.html" },
+    { "source": "/stethoscribe/:path*", "destination": "/index.html" }
   ],
   "headers": [
     {
