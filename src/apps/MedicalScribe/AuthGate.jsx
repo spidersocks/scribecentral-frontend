@@ -320,14 +320,17 @@ function LandingView({ onSignIn, onSignUp, onTryDemo }) {
     <div className={styles.landingWrapper}>
       <div className={styles.landingInner}>
         <div className={styles.landingContent}>
-          <span className={styles.heroTag}>Unmaintained demo</span>
+          <span className={styles.heroTag}>AI Clinical Documentation</span>
           <h1 className={styles.heroTitle}>
-            This is a demo, and it is no longer being maintained.
+            StethoscribeAI keeps your focus on patients, not paperwork.
           </h1>
           <p className={styles.heroSubtitle}>
-            StethoscribeAI is left online so you can try real-time transcription
-            and sample notes. It is not an active product, and nothing here is
-            being updated.
+            Stream consultations in real-time, intelligently extract key medical
+            information, and generate polished clinical notes in seconds. Built
+            for busy providers who need trust, accuracy, and speed.
+          </p>
+          <p className={styles.disclaimer}>
+            This is a demo, and it is no longer being maintained.
           </p>
 
           <div className={styles.badgeRow}>
@@ -365,7 +368,7 @@ function LandingView({ onSignIn, onSignUp, onTryDemo }) {
                 className={styles.mediaLogo}
               />
               <div className={styles.mediaHeaderText}>
-                <span className={styles.mediaTitle}>What you can still try</span>
+                <span className={styles.mediaTitle}>What it does</span>
               </div>
             </div>
 
